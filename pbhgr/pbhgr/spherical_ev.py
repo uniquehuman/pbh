@@ -402,7 +402,11 @@ class Run:
         fd = (lam1 - lam0) / dt
         mid = 0.5 * (ld0 + ld1)
         num = np.sqrt(np.sum((fd - mid) ** 2))
-        den = np.sqrt(np.sum(mid ** 2)) + 1e-300
+        # normalise by the energy-density rate scale 4 pi r e^{lambda+mu} rho = e^{mu} S_E/(r dr):
+        # the momentum density j is bounded by rho, so this measures the mismatch relative to
+        # the largest flux the matter could carry, and stays meaningful when j ~ 0 (static states)
+        mu_c = 0.5 * (met1.mu_edge[1:] + met1.mu_edge[:-1])
+        den = np.sqrt(np.sum((np.exp(mu_c) * met1.S["SE"] / (self.grid.r_c * self.grid.dr)) ** 2)) + 1e-300
         return float(num / den), met1
 
     def _diagnostics(self, met: Metric, mc_res=np.nan):
