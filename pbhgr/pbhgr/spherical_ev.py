@@ -144,6 +144,7 @@ class Particles:
     tau: np.ndarray = None                         # proper time (massive particles)
     N0: np.ndarray = None                          # initial weight (for emission threshold)
     pending: np.ndarray = None                     # decayed but not yet emitted rest mass
+    thr: np.ndarray = None                         # per-particle emission threshold (drawn lazily; inf = never)
 
     def __post_init__(self):
         n = len(self.r)
@@ -153,6 +154,8 @@ class Particles:
             self.N0 = self.N.copy()
         if self.pending is None:
             self.pending = np.zeros(n)
+        if self.thr is None:
+            self.thr = np.full(n, np.nan)
 
     def __len__(self):
         return len(self.r)
@@ -162,10 +165,10 @@ class Particles:
 
     def select(self, mask):
         return Particles(self.r[mask], self.w[mask], self.L[mask], self.N[mask], self.m[mask],
-                         self.tau[mask], self.N0[mask], self.pending[mask])
+                         self.tau[mask], self.N0[mask], self.pending[mask], self.thr[mask])
 
     def append(self, other: "Particles"):
-        for k in ("r", "w", "L", "N", "m", "tau", "N0", "pending"):
+        for k in ("r", "w", "L", "N", "m", "tau", "N0", "pending", "thr"):
             setattr(self, k, np.concatenate([getattr(self, k), getattr(other, k)]))
 
 
@@ -230,7 +233,7 @@ def rhs(grid: Grid, P: Particles, r, w, N, Gamma: float):
     Metric sources use the start-of-step weight P.N plus the decayed-but-not-yet-emitted
     mass P.pending: that energy is still physically present (it belongs to daughters that
     will be emitted at the parent's position), so it must gravitate until emission."""
-    Ptmp = Particles(r, w, P.L, P.N, P.m, P.tau, P.N0, P.pending)
+    Ptmp = Particles(r, w, P.L, P.N, P.m, P.tau, P.N0, P.pending, P.thr)
     met = solve_metric(grid, Ptmp)
     m, mu, mup, lamdot = metric_at(grid, met, r)
     a = np.maximum(1.0 - 2.0 * m / r, 1e-14)
@@ -249,7 +252,12 @@ def rhs(grid: Grid, P: Particles, r, w, N, Gamma: float):
 def emit_daughters(P: Particles, rng: np.random.Generator, emit_fraction: float, force: bool = False):
     """Convert pending decayed X mass into pairs of massless daughters. Returns new Particles or None."""
     massive = P.m > 0
-    thr = emit_fraction * P.N0
+    # per-particle randomised threshold in [0.5, 1.5] * emit_fraction * N0: identical thresholds would make all
+    # macroparticles emit in synchronised bursts (visible as steps in the decayed-mass history)
+    undrawn = np.isnan(P.thr)
+    if np.any(undrawn):
+        P.thr[undrawn] = np.where(massive[undrawn], emit_fraction * P.N0[undrawn] * rng.uniform(0.5, 1.5, int(undrawn.sum())), np.inf)
+    thr = P.thr
     sel = massive & (P.pending > 0) & ((P.pending >= thr) | force)
     if not np.any(sel):
         return None
@@ -278,8 +286,9 @@ def emit_daughters(P: Particles, rng: np.random.Generator, emit_fraction: float,
         wd = kx2
         Ld = r**2 * (ky2**2 + kz2**2)
         out.append(Particles(r.copy(), wd, Ld, P.pending[idx].copy(), np.zeros(n),
-                             np.zeros(n), P.pending[idx].copy(), np.zeros(n)))
+                             np.zeros(n), P.pending[idx].copy(), np.zeros(n), np.full(n, np.inf)))
     P.pending[idx] = 0.0
+    P.thr[idx] = emit_fraction * P.N0[idx] * rng.uniform(0.5, 1.5, n)
     D = out[0]
     D.append(out[1])
     return D
@@ -298,6 +307,7 @@ class RunConfig:
     seed: int = 0
     nsub: int = 4
     store_profiles: bool = False
+    store_particles: int = 0            # if >0: keep this many sampled particles per diagnostic snapshot
 
 
 @dataclass
@@ -416,8 +426,13 @@ class Run:
         }
         self.diag.append(d)
         if self.cfg.store_profiles:
-            self.profiles.append({"t": self.t, "m_edge": met.m_edge.copy(), "mu_edge": met.mu_edge.copy(),
-                                  "SE": met.S["SE"].copy(), "Sj": met.S["Sj"].copy()})
+            snap = {"t": self.t, "m_edge": met.m_edge.copy(), "mu_edge": met.mu_edge.copy(),
+                    "SE": met.S["SE"].copy(), "Sj": met.S["Sj"].copy(), "Sp": met.S["Sp"].copy()}
+            if self.cfg.store_particles > 0 and len(P):
+                ns = min(self.cfg.store_particles, len(P))
+                idx = np.linspace(0, len(P) - 1, ns).astype(int)
+                snap["particles"] = {k: getattr(P, k)[idx].copy() for k in ("r", "w", "L", "N", "m", "tau")}
+            self.profiles.append(snap)
         return d
 
     def dt(self, met: Metric):
