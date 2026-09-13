@@ -161,7 +161,7 @@ class Particles:
         return len(self.r)
 
     def energy(self):
-        return np.sqrt(self.m**2 + self.w**2 + self.L / self.r**2)
+        return np.sqrt(self.m**2 + self.w**2 + self.L / np.maximum(self.r**2, 1e-300))
 
     def select(self, mask):
         return Particles(self.r[mask], self.w[mask], self.L[mask], self.N[mask], self.m[mask],
@@ -239,9 +239,10 @@ def rhs(grid: Grid, P: Particles, r, w, N, Gamma: float):
     a = np.maximum(1.0 - 2.0 * m / r, 1e-14)
     emu = np.exp(mu)
     eml = emu * np.sqrt(a)                     # e^{mu - lambda}
-    E = np.sqrt(P.m**2 + w**2 + P.L / r**2)
+    r2 = np.maximum(r**2, 1e-300)
+    E = np.sqrt(P.m**2 + w**2 + P.L / r2)
     dr = eml * w / E
-    dw = -lamdot * w - eml * mup * E + eml * P.L / (r**3 * E)
+    dw = -lamdot * w - eml * mup * E + eml * P.L / (r * r2 * E)
     massive = P.m > 0
     dtau = np.where(massive, emu / np.maximum(E, 1e-300), 0.0)
     dN = np.where(massive, -Gamma * dtau * N, 0.0)
