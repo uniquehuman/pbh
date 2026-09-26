@@ -17,13 +17,13 @@ from pbhgr.ltb import LTBGaussian
 ap = argparse.ArgumentParser()
 ap.add_argument("test"); ap.add_argument("--mu", type=float, default=0.3); ap.add_argument("--tend", type=float, default=6.0)
 ap.add_argument("--K", type=int, default=2000); ap.add_argument("--n", type=int, default=4); ap.add_argument("--xout", type=float, default=5.0)
-ap.add_argument("--cfl", type=float, default=0.4); ap.add_argument("--out", default="runs/v1"); ap.add_argument("--stretch", type=float, default=0.0); ap.add_argument("--sigma", type=float, default=0.0); ap.add_argument("--tinj", type=float, default=1.0); ap.add_argument("--xdisp", type=float, default=2.0); ap.add_argument("--diag", type=int, default=100); ap.add_argument("--stop_after_ah", type=float, default=0.0); ap.add_argument("--dR", type=float, default=0.0); ap.add_argument("--release", default=""); ap.add_argument("--rel_k", type=float, default=10.0); ap.add_argument("--rel_delta", type=float, default=0.05); ap.add_argument("--rel_h", type=float, default=0.6); ap.add_argument("--rel_xmax", type=float, default=2.0); ap.add_argument("--n_inner", type=int, default=0); ap.add_argument("--x_inner", type=float, default=0.5)
+ap.add_argument("--cfl", type=float, default=0.4); ap.add_argument("--out", default="runs/v1"); ap.add_argument("--stretch", type=float, default=0.0); ap.add_argument("--sigma", type=float, default=0.0); ap.add_argument("--tinj", type=float, default=1.0); ap.add_argument("--xdisp", type=float, default=2.0); ap.add_argument("--diag", type=int, default=100); ap.add_argument("--stop_after_ah", type=float, default=0.0); ap.add_argument("--dR", type=float, default=0.0); ap.add_argument("--release", default=""); ap.add_argument("--rel_k", type=float, default=10.0); ap.add_argument("--rel_delta", type=float, default=0.05); ap.add_argument("--rel_h", type=float, default=0.6); ap.add_argument("--rel_xmax", type=float, default=2.0); ap.add_argument("--rel_bnl", type=float, default=0.0); ap.add_argument("--n_inner", type=int, default=0); ap.add_argument("--x_inner", type=float, default=0.5)
 args = ap.parse_args()
 out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
 bg = Background(H_i=5.0); rm = np.sqrt(6.0); t_H = bg.t_i * (np.sqrt(6) / 0.2) ** 3
 x_out = args.xout * rm
 grid = CosmoGrid(x_out=x_out, K=args.K, stretch=args.stretch)
-log = open(out / (f"{args.test}_mu{args.mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" if args.release else "") + ".log"), "w")
+log = open(out / (f"{args.test}_mu{args.mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" + (f"_b{args.rel_bnl:g}" if args.rel_bnl > 0 else "") if args.release else "") + ".log"), "w")
 def P_(*a):
     print(*a); print(*a, file=log); log.flush()
 P_(f"t_i={bg.t_i:.5f} t_H={t_H:.3f} ({t_H/bg.t_i:.1f} t_i)  x_out={x_out:.3f} (H_i x_out={5*x_out:.0f})  K={args.K} stretch={args.stretch} dx_min={grid.dx:.2e} ({grid.dx/rm:.1e} r_m) dx_max={grid.dxc.max():.2e}  particles/cell={args.n}")
@@ -96,7 +96,7 @@ elif args.test in ("ltb", "ah"):
        f"median tau0/t_i-1={np.median(tau_off)/bg.t_i-1:+.2e}  p_m/m_LTB-1 median={np.median(met0.p_m/m0-1):+.2e} p95={np.percentile(np.abs(met0.p_m/m0-1),95):.2e}")
     snaps = tuple(np.array([0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 0.9]) * min(tC0, args.tend * t_H))
     cfg = CosmoRunConfig(cfl=args.cfl, t_end=args.tend * t_H, diag_every=args.diag, snapshot_times=snaps,
-                         inject_t=args.tinj * t_H if args.sigma > 0 else 0.0, inject_sigma=args.sigma, inject_xmax=args.xdisp * rm, dR_target=args.dR, release_mode=args.release, release_k_ratio=args.rel_k, release_delta_ent=args.rel_delta, release_h=args.rel_h, release_t_ent=t_H, release_xmax=args.rel_xmax * rm)
+                         inject_t=args.tinj * t_H if args.sigma > 0 else 0.0, inject_sigma=args.sigma, inject_xmax=args.xdisp * rm, dR_target=args.dR, release_mode=args.release, release_k_ratio=args.rel_k, release_delta_ent=args.rel_delta, release_h=args.rel_h, release_t_ent=t_H, release_xmax=args.rel_xmax * rm, release_b_nl=args.rel_bnl)
     run = CosmoRun(grid, bg, part, cfg, bg.t_i)
     t0 = time.time(); met = run.run(cb)
     if args.release: P_(f"  release mode {args.release}: k ratio {args.rel_k}, delta/zeta {args.rel_delta}, h {args.rel_h}; shells released {run.n_released}, first release at t/t_H={run.t_first_release/t_H:.2f}")
@@ -142,7 +142,7 @@ elif args.test in ("ltb", "ah"):
     if hasattr(run, "ueq_profile"):
         up = np.abs(run.ueq_profile); xe = grid.x_edge
         P_("  unused-equation residual profile (|res|/scale) by x/r_m: " + ", ".join(f"[{lo},{hi}):{np.max(up[(xe>=lo*rm)&(xe<hi*rm)]):.1e}" for lo,hi in ((0,0.02),(0.02,0.2),(0.2,1),(1,2),(2,4),(4,5.01))))
-    tag = f"{args.test}_mu{mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" if args.release else "")
+    tag = f"{args.test}_mu{mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" + (f"_b{args.rel_bnl:g}" if args.rel_bnl > 0 else "") if args.release else "")
     json.dump({"diag": run.diag, "ltb_rows": rows, "ah_first": run.ah_first}, open(out / f"{tag}.json", "w"), default=float)
     np.savez(out / f"{tag}_shells.npz", x0=x, N=N, r_lab=r_lab, m0=m0, E0=E0, tau_off=tau_off, tau_trap=run.tau_trap, t_trap=run.t_trap,
              tau_end=part.tau, x_end=part.x, P_end=part.P, t_H=t_H, mu=mu)

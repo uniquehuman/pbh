@@ -323,6 +323,7 @@ class CosmoRunConfig:
     release_h: float = 0.6
     release_t_ent: float = 0.0      # entry time of the r_m scale (t_H); a_ent = a(release_t_ent)
     release_xmax: float = 0.0       # only shells with initial |x| < release_xmax (0 = all)
+    release_b_nl: float = 0.0       # ebrahimian: if > 0, fixed release radius R = b_nl R_max for every shell (timing scan)
     release_seed: int = 0
     restretch_every: int = 20
     stretch_max: float = 10.0
@@ -598,6 +599,8 @@ class CosmoRun:
         elif cfg.release_mode == "ebrahimian":
             a_ent = self.bg.a(cfg.release_t_ent)
             b_nl = np.minimum((cfg.release_delta_ent * cfg.release_k_ratio**2 * self.a_at_Rmax / a_ent) ** (2.0 / 3.0), 0.95)
+            if cfg.release_b_nl > 0:
+                b_nl = np.full_like(b_nl, min(cfg.release_b_nl, 0.95))
             sel = cand & (R <= b_nl * self.R_max)
             sigma = np.sqrt(np.maximum(m[sel] / np.maximum(R[sel], 1e-300), 0.0)) / cfg.release_k_ratio
         else:
