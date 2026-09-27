@@ -94,3 +94,20 @@ class LTBGaussian:
             else:
                 eta[i] = brentq(lambda e: e - np.sin(e) - xi, 0.0, 2 * np.pi, xtol=1e-13, rtol=1e-13, maxiter=200)
         return m / (-2 * E) * cls._g(eta)
+
+
+class LTBProfile(LTBGaussian):
+    """Growing-mode LTB solution for a tabulated normalised profile Psi(r): zeta = mu Psi(r) (spline derivatives).
+    r_m = maximum of the turnaround compaction -2E(r); t_H = entry time of the r_m scale, t_i (r_m H_i)^3."""
+
+    def __init__(self, mu: float, table: dict, k: float = 1.0, H_i: float = 5.0):
+        super().__init__(mu, k, H_i)
+        self._s = table["spline"]; self._s1 = self._s.derivative(1); self._s2 = self._s.derivative(2)
+        self.name = table.get("name", "table")
+        r = np.linspace(1e-3, table["r"][-1] * 0.9, 20000)
+        self.r_m = float(r[np.argmax(-self.E(r))])
+        self.t_H = self.t_i * (self.r_m * H_i) ** 3
+
+    def zeta(self, r):   return self.mu * self._s(np.asarray(r, dtype=float) * self.k)
+    def dzeta(self, r):  return self.mu * self.k * self._s1(np.asarray(r, dtype=float) * self.k)
+    def ddzeta(self, r): return self.mu * self.k**2 * self._s2(np.asarray(r, dtype=float) * self.k)

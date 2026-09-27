@@ -17,13 +17,24 @@ from pbhgr.ltb import LTBGaussian
 ap = argparse.ArgumentParser()
 ap.add_argument("test"); ap.add_argument("--mu", type=float, default=0.3); ap.add_argument("--tend", type=float, default=6.0)
 ap.add_argument("--K", type=int, default=2000); ap.add_argument("--n", type=int, default=4); ap.add_argument("--xout", type=float, default=5.0)
-ap.add_argument("--cfl", type=float, default=0.4); ap.add_argument("--out", default="runs/v1"); ap.add_argument("--stretch", type=float, default=0.0); ap.add_argument("--sigma", type=float, default=0.0); ap.add_argument("--tinj", type=float, default=1.0); ap.add_argument("--xdisp", type=float, default=2.0); ap.add_argument("--diag", type=int, default=100); ap.add_argument("--stop_after_ah", type=float, default=0.0); ap.add_argument("--dR", type=float, default=0.0); ap.add_argument("--release", default=""); ap.add_argument("--rel_k", type=float, default=10.0); ap.add_argument("--rel_delta", type=float, default=0.05); ap.add_argument("--rel_h", type=float, default=0.6); ap.add_argument("--rel_xmax", type=float, default=2.0); ap.add_argument("--rel_bnl", type=float, default=0.0); ap.add_argument("--n_inner", type=int, default=0); ap.add_argument("--x_inner", type=float, default=0.5)
+ap.add_argument("--cfl", type=float, default=0.4); ap.add_argument("--out", default="runs/v1"); ap.add_argument("--stretch", type=float, default=0.0); ap.add_argument("--sigma", type=float, default=0.0); ap.add_argument("--tinj", type=float, default=1.0); ap.add_argument("--xdisp", type=float, default=2.0); ap.add_argument("--diag", type=int, default=100); ap.add_argument("--stop_after_ah", type=float, default=0.0); ap.add_argument("--dR", type=float, default=0.0); ap.add_argument("--release", default=""); ap.add_argument("--rel_k", type=float, default=10.0); ap.add_argument("--rel_delta", type=float, default=0.05); ap.add_argument("--rel_h", type=float, default=0.6); ap.add_argument("--rel_xmax", type=float, default=2.0); ap.add_argument("--rel_bnl", type=float, default=0.0); ap.add_argument("--profile", default="yoo"); ap.add_argument("--n_inner", type=int, default=0); ap.add_argument("--x_inner", type=float, default=0.5)
 args = ap.parse_args()
 out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
 bg = Background(H_i=5.0); rm = np.sqrt(6.0); t_H = bg.t_i * (np.sqrt(6) / 0.2) ** 3
+from pbhgr.ltb import LTBProfile
+from pbhgr.profiles import profile_table
+_table = None
+if args.profile != "yoo":
+    _table = profile_table(args.profile); _table["name"] = args.profile
+    _Lref = LTBProfile(0.5 if args.test == "ah" else args.mu, _table); rm = _Lref.r_m; t_H = _Lref.t_H
+def make_L(mu_):
+    return LTBGaussian(mu_) if _table is None else LTBProfile(mu_, _table)
+def make_prof(mu_, r_max):
+    L_ = make_L(mu_)
+    return yoo_spherical_cmc(mu_, r_max=r_max) if _table is None else yoo_spherical_cmc(mu_, r_max=r_max, zeta_fns=(L_.zeta, L_.dzeta, L_.ddzeta))
 x_out = args.xout * rm
 grid = CosmoGrid(x_out=x_out, K=args.K, stretch=args.stretch)
-log = open(out / (f"{args.test}_mu{args.mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" + (f"_b{args.rel_bnl:g}" if args.rel_bnl > 0 else "") if args.release else "") + ".log"), "w")
+log = open(out / (f"{args.test}_mu{args.mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" + (f"_b{args.rel_bnl:g}" if args.rel_bnl > 0 else "") if args.release else "") + (f"_{args.profile}" if args.profile != "yoo" else "") + ".log"), "w")
 def P_(*a):
     print(*a); print(*a, file=log); log.flush()
 P_(f"t_i={bg.t_i:.5f} t_H={t_H:.3f} ({t_H/bg.t_i:.1f} t_i)  x_out={x_out:.3f} (H_i x_out={5*x_out:.0f})  K={args.K} stretch={args.stretch} dx_min={grid.dx:.2e} ({grid.dx/rm:.1e} r_m) dx_max={grid.dxc.max():.2e}  particles/cell={args.n}")
@@ -52,8 +63,8 @@ if args.test == "flrw":
        f"max|P| (rest)={np.max(np.abs(part.P)):.2e}  m_out/flrw-1={met.m_edge[-1]/(0.5*bg.H(run.t)**2*met.R_edge[-1]**3)-1:+.2e}")
 
 elif args.test == "idcheck":
-    prof = yoo_spherical_cmc(args.mu, r_max=x_out * 1.05)
-    L = LTBGaussian(args.mu)
+    prof = make_prof(args.mu, x_out * 1.05)
+    L = make_L(args.mu)
     # enclosed rest mass as the shell label: LTB  M_rest(r) = int dm/sqrt(1+2E);  ID  M_rest(R) = int dN/dR dR
     r = prof["r"]; R = prof["R"]
     Mrest_id = np.concatenate([[0], np.cumsum(0.5 * (prof["dN_dR"][1:] + prof["dN_dR"][:-1]) * np.diff(R))])
@@ -77,11 +88,12 @@ elif args.test == "idcheck":
 
 elif args.test in ("ltb", "ah"):
     mu = 0.5 if args.test == "ah" else args.mu
-    prof = yoo_spherical_cmc(mu, r_max=x_out * 1.05)
+    prof = make_prof(mu, x_out * 1.05)
     x, P, Lsq, N = sample_shells_quiet(prof, grid.x_edge, args.n, n_inner=args.n_inner, x_inner=args.x_inner * rm)
     part = CParticles(x, P, Lsq, N)
-    L = LTBGaussian(mu)
+    L = make_L(mu)
     tC0 = L.tC(1e-6)
+    if not np.isfinite(tC0) or tC0 <= 0: tC0 = L.tC(rm)          # flat-core profiles: no central growing mode, use the r_m shell
     P_(f"mu={mu}: LTB t_C(0)={tC0/t_H:.3f} t_H, t_C(r_m)={L.tC(rm)/t_H:.2f} t_H; run to {args.tend} t_H")
     met0 = solve_metric(grid, bg, part, bg.t_i)
     R0 = met0.a * part.x
@@ -142,7 +154,7 @@ elif args.test in ("ltb", "ah"):
     if hasattr(run, "ueq_profile"):
         up = np.abs(run.ueq_profile); xe = grid.x_edge
         P_("  unused-equation residual profile (|res|/scale) by x/r_m: " + ", ".join(f"[{lo},{hi}):{np.max(up[(xe>=lo*rm)&(xe<hi*rm)]):.1e}" for lo,hi in ((0,0.02),(0.02,0.2),(0.2,1),(1,2),(2,4),(4,5.01))))
-    tag = f"{args.test}_mu{mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" + (f"_b{args.rel_bnl:g}" if args.rel_bnl > 0 else "") if args.release else "")
+    tag = f"{args.test}_mu{mu:.3f}_K{args.K}_n{args.n}" + (f"i{args.n_inner}" if args.n_inner else "") + f"_s{args.stretch:.0f}_sig{args.sigma:.0e}" + (f"_dR{args.dR:g}" if args.dR > 0 else "") + (f"_rel{args.release}_k{args.rel_k:g}_d{args.rel_delta:g}" + (f"_b{args.rel_bnl:g}" if args.rel_bnl > 0 else "") if args.release else "") + (f"_{args.profile}" if args.profile != "yoo" else "")
     json.dump({"diag": run.diag, "ltb_rows": rows, "ah_first": run.ah_first}, open(out / f"{tag}.json", "w"), default=float)
     np.savez(out / f"{tag}_shells.npz", x0=x, N=N, r_lab=r_lab, m0=m0, E0=E0, tau_off=tau_off, tau_trap=run.tau_trap, t_trap=run.t_trap,
              tau_end=part.tau, x_end=part.x, P_end=part.P, t_H=t_H, mu=mu)

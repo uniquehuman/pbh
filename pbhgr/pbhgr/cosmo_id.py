@@ -19,12 +19,16 @@ from __future__ import annotations
 import numpy as np
 
 
-def yoo_spherical_cmc(mu: float, k: float = 1.0, H_i: float = 5.0, r_max: float = 20.0, n: int = 80001):
+def yoo_spherical_cmc(mu: float, k: float = 1.0, H_i: float = 5.0, r_max: float = 20.0, n: int = 80001, zeta_fns=None):
+    """zeta_fns: optional (zeta, dzeta, ddzeta) callables of r replacing the Gaussian profile."""
     r = np.linspace(0.0, r_max, n)
     aH = H_i                                          # a_i = 1
-    zeta = mu * np.exp(-k**2 * r**2 / 6)
-    dz = -(k**2 * r / 3) * zeta
-    ddz = (-k**2 / 3 + k**4 * r**2 / 9) * zeta
+    if zeta_fns is None:
+        zeta = mu * np.exp(-k**2 * r**2 / 6)
+        dz = -(k**2 * r / 3) * zeta
+        ddz = (-k**2 / 3 + k**4 * r**2 / 9) * zeta
+    else:
+        zeta, dz, ddz = (np.asarray(f(r), dtype=float) for f in zeta_fns)
     Psi = np.exp(zeta / 2)
     Psi1 = Psi * dz / 2
     Psi2 = Psi * (ddz / 2 + dz**2 / 4)
