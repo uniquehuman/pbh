@@ -25,10 +25,12 @@ def lognormal_peak_profile(Delta: float, nu: float = 4.0, r_max: float = 40.0, n
     s0 = np.sqrt(np.sum(P) * dlnk); s1 = np.sqrt(np.sum(P * k**2) * dlnk); s2 = np.sqrt(np.sum(P * k**4) * dlnk)
     gamma = s1**2 / (s0 * s2); R_star = np.sqrt(3) * s1 / s2
     r = np.linspace(0.0, r_max, n_r)
-    kr = np.outer(r, k)
-    j0 = np.where(kr > 1e-8, np.sin(kr) / np.maximum(kr, 1e-300), 1.0)
-    psi = (j0 @ P) * dlnk / s0**2
-    lap_psi = -((j0 * k[None, :]**2) @ P) * dlnk / s0**2
+    psi = np.empty(n_r); lap_psi = np.empty(n_r)
+    for i0 in range(0, n_r, 200):                        # chunked: the full outer product would take ~2 GB
+        kr = np.outer(r[i0:i0 + 200], k)
+        j0 = np.where(kr > 1e-8, np.sin(kr) / np.maximum(kr, 1e-300), 1.0)
+        psi[i0:i0 + 200] = (j0 @ P) * dlnk / s0**2
+        lap_psi[i0:i0 + 200] = -((j0 * k[None, :]**2) @ P) * dlnk / s0**2
     x = gamma * nu + _theta_bbks(gamma, gamma * nu)
     C = np.array([[s0**2, -s1**2], [-s1**2, s2**2]])
     u = np.array([nu * s0, -x * s2])
