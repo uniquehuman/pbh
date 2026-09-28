@@ -1,0 +1,4 @@
+2026-09-28T22:30:58Z
+derivation+verification agents launched
+2026-09-28T22:31:41Z mutation pre-registration written
+2026-09-28T22:51:13Z physics-derivation done: derivation.md + derivation/{core,backgrounds,center,common}.py, output.txt; F10 sign discrepancy (R1)
