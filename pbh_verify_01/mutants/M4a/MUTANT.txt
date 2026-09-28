@@ -1,0 +1,2 @@
+M4a: sign of the radial flux j_r
+matter.py: 'j_r = -Pi * dphi' -> 'j_r = Pi * dphi'

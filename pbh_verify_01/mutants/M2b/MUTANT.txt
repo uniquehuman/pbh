@@ -1,0 +1,3 @@
+M2b: orientation of the spatial normal s^a
+diagnose.py: 'Gamma = dR / A\n' -> 'Gamma = -dR / A\n'
+diagnose.py: 'Gamma6 = dR6 / A' -> 'Gamma6 = -dR6 / A'

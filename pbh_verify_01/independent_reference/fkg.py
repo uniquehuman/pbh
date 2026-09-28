@@ -60,11 +60,16 @@ class FKG:
         return dict(r=r, A=s["a"] * one, R=s["a"] * r, KA=-s["H"] * one, KB=-s["H"] * one,
                     phi=s["phi"] * one, Pi=s["dphi"] * one, m=self.m, state=s)
 
-    def period_average(self, t0, nph=64):
-        """Trapezoid average over one period 2 pi/m starting at t0; returns (<rho>, <p>, times)."""
-        ts = t0 + np.linspace(0.0, 2 * np.pi / self.m, nph + 1)
+    def average_weights(self, t0, nph=64, nper=4):
+        """Hann-windowed average over nper periods 2 pi/m starting at t0 (a plain one-period average
+        leaves an O(H/m) phase-dependent term from the decaying amplitude; the smooth window removes
+        it).  Returns (times, normalised weights)."""
+        T = 2 * np.pi / self.m * nper
+        ts = t0 + np.linspace(0.0, T, nph * nper + 1)
+        w = np.sin(np.pi * (ts - t0) / T)**2
+        return ts, w / w.sum()
+
+    def period_average(self, t0, nph=64, nper=4):
+        ts, w = self.average_weights(t0, nph, nper)
         s = self.state(ts)
-        w = np.ones(nph + 1)
-        w[0] = w[-1] = 0.5
-        w /= w.sum()
         return float(np.dot(w, s["rho"])), float(np.dot(w, s["p"])), ts

@@ -1,0 +1,2 @@
+M3a: lost 4pi in the flux mass
+diagnose.py: 'M_flux = op.cumint(FOUR_PI * R ** 2 * U * j_r, +1)' -> 'M_flux = op.cumint(R ** 2 * U * j_r, +1)'

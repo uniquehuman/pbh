@@ -1,0 +1,2 @@
+M3b: 8 pi rho instead of 16 pi rho in the Hamiltonian constraint
+diagnose.py: '2.0 * KB ** 2, -4.0 * FOUR_PI * rho)' -> '2.0 * KB ** 2, -2.0 * FOUR_PI * rho)'

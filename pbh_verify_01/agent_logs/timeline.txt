@@ -2,3 +2,7 @@
 derivation+verification agents launched
 2026-09-28T22:31:41Z mutation pre-registration written
 2026-09-28T22:51:13Z physics-derivation done: derivation.md + derivation/{core,backgrounds,center,common}.py, output.txt; F10 sign discrepancy (R1)
+2026-09-28T22:52:05Z derivation done (21 min); contract-v1.0 frozen
+2026-09-28T22:52:47Z implementation B and solo A launched on contract-v1.0
+2026-09-28T23:17:45Z implementation B done, tagged impl-B-v0.1
+2026-09-28T23:33:52Z solo A done (106 tests); audit done (seeds S1-S5 all reported)

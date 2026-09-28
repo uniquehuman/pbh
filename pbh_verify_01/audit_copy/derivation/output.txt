@@ -1,0 +1,385 @@
+# PBH-VERIFY-01 derivation output, generated 2026-09-28T22:47:18Z, sympy 1.14.0
+# exit codes: core=1 (one intended FAIL: F10 as written in contract v1.0-draft), backgrounds=0, center=0
+
+################ derivation/core.py ################
+== D0: 4-metric ==
+[PASS] det g = -(al A R^2 sin th)^2
+[PASS] g^{-1}: g^tt=-1/al^2, g^tr=be/al^2, g^rr=1/A^2-be^2/al^2
+   (4D Christoffels done, 3.2s)
+
+== D1: normals, Gamma, U ==
+[PASS] n^a = (1, -be, 0, 0)/al
+[PASS] n.n = -1
+[PASS] s.s = +1
+[PASS] s.n = 0
+   U = n^a d_a R: (-beta(t, r)*Derivative(R(t, r), r) + Derivative(R(t, r), t))/alpha(t, r)
+[PASS] Gamma = s^a d_a R = R'/A
+
+== D1b: extrinsic curvature, two independent routes ==
+[PASS] K_ij(ADM formula) == -gamma gamma nabla n (4D Christoffels), spatial block
+[PASS] K_ab n^b = 0 (K is spatial)
+[PASS] unprojected -nabla_i n_j on spatial coords equals K_ij (since n_i = 0)
+[PASS] K^phi_phi = K^theta_theta
+[PASS] K_ij off-diagonal = 0
+   K_A = K^r_r: (A(t, r)*Derivative(beta(t, r), r) + beta(t, r)*Derivative(A(t, r), r) - Derivative(A(t, r), t))/(A(t, r)*alpha(t, r))
+   K_B = K^th_th: (beta(t, r)*Derivative(R(t, r), r) - Derivative(R(t, r), t))/(R(t, r)*alpha(t, r))
+[PASS] F1: U = n^a d_a R = -R K_B
+[PASS] K = gamma^ij K_ij = -nabla_a n^a = K_A + 2 K_B
+[PASS] sign convention: expanding FLRW gives K_A=K_B=-adot/a, K=-3H
+
+== D4: 3-Ricci scalar ==
+[PASS] F7: 3R = 2(1-Gamma^2)/R^2 - 4 Gamma'/(A R)
+   3R (expanded form): 2*(A(t, r)**3 - 2*A(t, r)*R(t, r)*Derivative(R(t, r), (r, 2)) - A(t, r)*Derivative(R(t, r), r)**2 + 2*R(t, r)*Derivative(A(t, r), r)*Derivative(R(t, r), r))/(A(t, r)**3*R(t, r)**2)
+
+== D5: constraints via 4D Einstein tensor (independent route) ==
+   (4D Ricci/Einstein done, 43.4s)
+[PASS] F8 (Gauss): 3R + K^2 - K_ijK^ij = 3R + 4K_AK_B + 2K_B^2 == 2 G_ab n^a n^b
+[PASS] Codazzi (3D route): D_j(K^j_r - delta^j_r K) = -2K_B' + 2(R'/R)(K_A-K_B)
+[PASS] Codazzi (4D route): D_j(K^j_r - delta K) == -G_ab n^a gamma^b_r  (= 8 pi j_r on shell)
+[PASS] F9: M := K_B' - (R'/R)(K_A-K_B) + 4 pi j_r with j_r = -G(n,e_r)/(8pi) vanishes identically
+   control (wrong sign of (R'/R) term) is nonzero: True
+
+== D2: stress tensor from L = -1/2 (grad phi)^2 - V, and projections ==
+[PASS] F2: T_ab = -2 dL/dg^ab + g_ab L = d_a phi d_b phi - g_ab[1/2 (grad phi)^2 + V]
+[PASS] Pi = n^a d_a phi = (d_t phi - be d_r phi)/al
+[PASS] F3: rho = 1/2 Pi^2 + 1/2 Phi^2 + V
+[PASS] F4: j_r = -gamma_r^a n^b T_ab = -Pi phi'
+[PASS] F5: S^r_r = 1/2 Pi^2 + 1/2 Phi^2 - V
+[PASS] F5: S^th_th = 1/2 Pi^2 - 1/2 Phi^2 - V
+[PASS] F5: S^ph_ph = S^th_th
+[PASS] orientation: outgoing wave phi=F(t-r) in flat space has j_r = +F'^2 > 0
+[PASS] Bianchi/matter: nabla_a T^a_t = (box phi - V'(phi)) d_t phi
+[PASS] Bianchi/matter: nabla_a T^a_r = (box phi - V'(phi)) d_r phi
+
+== D3: homogeneous Friedmann-Klein-Gordon (F6), k = 0, +1, -1 ==
+[PASS] k=+0: G_tt = 8 pi rho  <=>  H^2 + k/a^2 = (8pi/3) rho
+[PASS] k=+0: G^r_r = G^th_th = -(2 a''/a + H^2 + k/a^2)  (= 8 pi p)
+[PASS] k=+0: box phi = -(phi'' + 3 H phi')  =>  KG: phi''+3H phi'+m^2 phi = 0
+[PASS] k=+0: slice values K_A = K_B = -H, Pi = phi', U = R H, rho,S^r_r,S^th_th = rho0,p0,p0
+[PASS] k=+1: G_tt = 8 pi rho  <=>  H^2 + k/a^2 = (8pi/3) rho
+[PASS] k=+1: G^r_r = G^th_th = -(2 a''/a + H^2 + k/a^2)  (= 8 pi p)
+[PASS] k=+1: box phi = -(phi'' + 3 H phi')  =>  KG: phi''+3H phi'+m^2 phi = 0
+[PASS] k=+1: slice values K_A = K_B = -H, Pi = phi', U = R H, rho,S^r_r,S^th_th = rho0,p0,p0
+[PASS] k=-1: G_tt = 8 pi rho  <=>  H^2 + k/a^2 = (8pi/3) rho
+[PASS] k=-1: G^r_r = G^th_th = -(2 a''/a + H^2 + k/a^2)  (= 8 pi p)
+[PASS] k=-1: box phi = -(phi'' + 3 H phi')  =>  KG: phi''+3H phi'+m^2 phi = 0
+[PASS] k=-1: slice values K_A = K_B = -H, Pi = phi', U = R H, rho,S^r_r,S^th_th = rho0,p0,p0
+[PASS] Hdot = -4 pi (rho + p) + k/a^2 ; for scalar rho+p = phidot^2 -> k=0: Hdot = -4 pi phidot^2
+
+== D7: Misner-Sharp mass ==
+[PASS] g^{ab} d_aR d_bR (t,r block) = Gamma^2 - U^2
+[PASS] F11: M_MS = (R/2)(1 - (R'/A)^2 + R^2 K_B^2)
+
+== D8: null expansions ==
+[PASS] q^{ab} = g^ab + n^a n^b - s^a s^b is the sphere projector (only angular comps: 1/R^2, 1/(R^2 sin^2))
+[PASS] k_+ = n + s is null, n.k = -1
+[PASS] theta_+: q^ab nabla_a k_b == k^a d_a ln(R^2) (area route)
+[PASS] F12: theta_+ = (2/R)(U + Gamma) = 2(+R'/(AR) - K_B)
+[PASS] k_- = n - s is null, n.k = -1
+[PASS] theta_-: q^ab nabla_a k_b == k^a d_a ln(R^2) (area route)
+[PASS] F12: theta_- = (2/R)(U - Gamma) = 2(-R'/(AR) - K_B)
+[PASS] F13: R^2 theta+ theta- /4 = U^2 - Gamma^2 = 2 M_MS/R - 1
+   note: a local boost of (n,s) rescales k+ -> e^eta k+, k- -> e^-eta k-, so theta+theta- (and M_MS) are slicing-independent;
+         theta+ and theta- separately are not; their signs are.
+
+== D7b: Kodama vector and the flux term ==
+[PASS] Kodama K^a = Gamma n^a - U s^a  (K.grad R = 0; K = static Killing field in Schwarzschild)
+[PASS] K^a d_a R = 0
+[PASS] 4 pi R^2 A * T(n,K) = 4 pi R^2 (rho R' + U j_r): the on-shell F10 integrand is the Kodama energy flux through the slice
+[PASS] Milligan+ (6c): 8 pi phidot phi' = (lamdot R' + 2 Rdot varphi' - 2 Rdot')/R  <=>  2 alpha * F9 = 0
+[PASS] Bloomfield+ (8a),(8b): U = e^{-phi} Rdot, Gamma = e^{-lambda/2} R' in comoving gauge
+
+== D6: mass-form identity F10 (slice functions of r) ==
+[FAIL] F10 as written in contract v1.0-draft: H_M = -(R^2R'/4) H + R^3 K_B M
+        remainder: (2*A(r)**3*K_A(r)*K_B(r)*R(r)**2 + A(r)**3*K_B(r)**2*R(r)**2 - 8*pi*A(r)**3*R(r)**2*rho(r) + A(r)**3 - 2*A(r)*R(r)*Derivative(R(r), (r, 2)) - A(r)*Derivative(R(r), r)**2 + 2*R(r)*Derivative(A(r), r)*Derivative(R(r), r))*Derivative(R(r), r)/A(r)**3
+[PASS] F10 corrected: H_M = +(R^2R'/4) H + R^3 K_B M
+   coefficients forced by the rho and j_r terms: c1: R(r)**2*Derivative(R(r), r)/4
+                                                 c2: K_B(r)*R(r)**3
+[PASS] areal gauge (R=r): on-shell M' = 4 pi r^2 (rho - r K_B j_r) = 4 pi r^2 (E - r K_B A J)  (V1 form, context_audit C4)
+
+(total time 80.9s)
+
+=== 60 PASS, 1 FAIL ===
+   FAIL: F10 as written in contract v1.0-draft: H_M = -(R^2R'/4) H + R^3 K_B M
+
+################ derivation/backgrounds.py ################
+
+######## Minkowski ########
+[PASS] Mink hyperboloid(tau, areal): alpha = 1, beta = -r/tau, A = tau/sqrt(tau^2+r^2)
+
+== Minkowski tau-hyperboloid (tau=t>0, areal r) ==
+   alpha: 1
+   beta: -r/t
+   A: t/sqrt(r**2 + t**2)
+   R: r
+   K_A: -1/t
+   K_B: -1/t
+   Gamma: sqrt(r**2 + t**2)/t
+   U: r/t
+   M_MS: 0
+   R theta+: 2*(r + sqrt(r**2 + t**2))/t
+   R theta-: 2*(r - sqrt(r**2 + t**2))/t
+[PASS] Minkowski tau-hyperboloid (tau=t>0, areal r): Hamiltonian constraint F8 = 0
+[PASS] Minkowski tau-hyperboloid (tau=t>0, areal r): momentum constraint F9 = 0
+[PASS] Minkowski tau-hyperboloid (tau=t>0, areal r): F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] Minkowski tau-hyperboloid (tau=t>0, areal r): claimed K_A = -1/t
+[PASS] Minkowski tau-hyperboloid (tau=t>0, areal r): claimed K_B = -1/t
+[PASS] Minkowski tau-hyperboloid (tau=t>0, areal r): claimed M_MS = 0
+[PASS] Milne: alpha=1, beta=0, A=tau
+
+== Minkowski Milne (tau=t, chi=r) ==
+   alpha: 1
+   beta: 0
+   A: t
+   R: t*sinh(r)
+   K_A: -1/t
+   K_B: -1/t
+   Gamma: cosh(r)
+   U: sinh(r)
+   M_MS: 0
+   R theta+: 2*exp(r)
+   R theta-: -2*exp(-r)
+[PASS] Minkowski Milne (tau=t, chi=r): Hamiltonian constraint F8 = 0
+[PASS] Minkowski Milne (tau=t, chi=r): momentum constraint F9 = 0
+[PASS] Minkowski Milne (tau=t, chi=r): F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] Minkowski Milne (tau=t, chi=r): claimed K_A = -1/t
+[PASS] Minkowski Milne (tau=t, chi=r): claimed K_B = -1/t
+[PASS] Minkowski Milne (tau=t, chi=r): claimed M_MS = 0
+[PASS] Minkowski Milne (tau=t, chi=r): claimed Rth+ = 2*exp(r)
+[PASS] Minkowski Milne (tau=t, chi=r): claimed Rth- = -2*exp(-r)
+[PASS] Mink stationary hyperboloidal: alpha = s/ell, beta = -r s/ell^2, A = ell/s
+
+== Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)) ==
+   alpha: sqrt(ell**2 + r**2)/ell
+   beta: -r*sqrt(ell**2 + r**2)/ell**2
+   A: ell/sqrt(ell**2 + r**2)
+   R: r
+   K_A: -1/ell
+   K_B: -1/ell
+   Gamma: sqrt(ell**2 + r**2)/ell
+   U: r/ell
+   M_MS: 0
+   R theta+: 2*(r + sqrt(ell**2 + r**2))/ell
+   R theta-: 2*(r - sqrt(ell**2 + r**2))/ell
+[PASS] Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)): Hamiltonian constraint F8 = 0
+[PASS] Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)): momentum constraint F9 = 0
+[PASS] Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)): F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)): claimed K_A = -1/ell
+[PASS] Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)): claimed K_B = -1/ell
+[PASS] Minkowski stationary hyperboloidal (t_M = T + sqrt(ell^2+r^2)): claimed M_MS = 0
+[PASS] mink_hyp: R theta+ > 0, R theta- < 0 at r = 0.1, 1, 10 (NORMAL, no marginal spheres)
+[PASS] milne: R theta+ > 0, R theta- < 0 at r = 0.1, 1, 10 (NORMAL, no marginal spheres)
+[PASS] mink_hyp_stat: R theta+ > 0, R theta- < 0 at r = 0.1, 1, 10 (NORMAL, no marginal spheres)
+   (numeric spot checks r = 0.1, 1, 10: all NORMAL)
+
+######## Schwarzschild ########
+[PASS] Kerr-Schild: A^2 = 1+2M/r, beta = (2M/r)/(1+2M/r), alpha^2 = 1/(1+2M/r)
+
+== Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild ==
+   alpha: sqrt(r)/sqrt(2*M + r)
+   beta: 2*M/(2*M + r)
+   A: sqrt(2*M + r)/sqrt(r)
+   R: r
+   K_A: 2*M*(-M - r)/(r**(3/2)*(2*M + r)**(3/2))
+   K_B: 2*M/(r**(3/2)*sqrt(2*M + r))
+   Gamma: sqrt(r)/sqrt(2*M + r)
+   U: -2*M/(sqrt(r)*sqrt(2*M + r))
+   M_MS: M
+   R theta+: 2*(-2*M + r)/(sqrt(r)*sqrt(2*M + r))
+   R theta-: -2*sqrt(2*M + r)/sqrt(r)
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: Hamiltonian constraint F8 = 0
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: momentum constraint F9 = 0
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: claimed M_MS = M
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: claimed K_B = 2*M/(r**2*sqrt(2*M/r + 1))
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: claimed K_A = -2*M*(M/r + 1)/(r**2*(2*M/r + 1)**(3/2))
+[PASS] Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild: claimed Rth+ = (-4*M/r + 2)/sqrt(2*M/r + 1)
+[PASS] KS: R theta+ = 0 at r* = 2*M
+      other expansion sign -, inner -, outer +, Gamma=0.7071  -> FUTURE_MOTS, ah_candidate=True
+[PASS] PG: alpha = 1, beta = +sqrt(2M/r), A = 1
+
+== Schwarzschild Painleve-Gullstrand (ingoing) ==
+   alpha: 1
+   beta: sqrt(2)*sqrt(M)/sqrt(r)
+   A: 1
+   R: r
+   K_A: -sqrt(2)*sqrt(M)/(2*r**(3/2))
+   K_B: sqrt(2)*sqrt(M)/r**(3/2)
+   Gamma: 1
+   U: -sqrt(2)*sqrt(M)/sqrt(r)
+   M_MS: M
+   R theta+: -2*sqrt(2)*sqrt(M)/sqrt(r) + 2
+   R theta-: -2*sqrt(2)*sqrt(M)/sqrt(r) - 2
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): Hamiltonian constraint F8 = 0
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): momentum constraint F9 = 0
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): claimed M_MS = M
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): claimed K_B = sqrt(2)*sqrt(M)/r**(3/2)
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): claimed K_A = -sqrt(2)*sqrt(M)/(2*r**(3/2))
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): claimed Rth+ = -2*sqrt(2)*sqrt(M)/sqrt(r) + 2
+[PASS] Schwarzschild Painleve-Gullstrand (ingoing): claimed Rth- = -2*sqrt(2)*sqrt(M)/sqrt(r) - 2
+[PASS] PG: R theta+ = 0 at r* = 2*M
+      other expansion sign -, inner -, outer +, Gamma=1.000  -> FUTURE_MOTS, ah_candidate=True
+[PASS] isotropic: A = psi^2, beta = 0, alpha^2 = ((1-M/2r)/(1+M/2r))^2
+
+== Schwarzschild isotropic, t = const (K = 0) ==
+   alpha: (-M + 2*r)/(M + 2*r)
+   beta: 0
+   A: (M + 2*r)**2/(4*r**2)
+   R: (M + 2*r)**2/(4*r)
+   K_A: 0
+   K_B: 0
+   Gamma: (-M + 2*r)/(M + 2*r)
+   U: 0
+   M_MS: M
+   R theta+: 2*(-M + 2*r)/(M + 2*r)
+   R theta-: 2*(M - 2*r)/(M + 2*r)
+[PASS] Schwarzschild isotropic, t = const (K = 0): Hamiltonian constraint F8 = 0
+[PASS] Schwarzschild isotropic, t = const (K = 0): momentum constraint F9 = 0
+[PASS] Schwarzschild isotropic, t = const (K = 0): F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] Schwarzschild isotropic, t = const (K = 0): claimed M_MS = M
+[PASS] Schwarzschild isotropic, t = const (K = 0): claimed K_A = 0
+[PASS] Schwarzschild isotropic, t = const (K = 0): claimed K_B = 0
+[PASS] Schwarzschild isotropic, t = const (K = 0): claimed Gamma = (-M/(2*r) + 1)/(M/(2*r) + 1)
+[PASS] isotropic: both R theta+ and R theta- vanish at r = M/2 (throat = bifurcation sphere, R = 2M)
+      r > M/2: (+,-) NORMAL;  r < M/2: (-,+) NORMAL_REVERSED (Gamma < 0);  r = M/2: (0,0) DOUBLY_MARGINAL -> DEGENERATE root
+[PASS] isotropic: inversion symmetry r -> M^2/(4r) maps R to R
+
+######## FLRW (dust-free generic a(t); rho from the Friedmann equation) ########
+
+== FLRW flat (k=0), comoving r ==
+   alpha: 1
+   beta: 0
+   A: a(t)
+   R: r*a(t)
+   K_A: -Derivative(a(t), t)/a(t)
+   K_B: -Derivative(a(t), t)/a(t)
+   Gamma: 1
+   U: r*Derivative(a(t), t)
+   M_MS: r**3*a(t)*Derivative(a(t), t)**2/2
+   R theta+: 2*r*Derivative(a(t), t) + 2
+   R theta-: 2*r*Derivative(a(t), t) - 2
+[PASS] FLRW flat (k=0), comoving r: Hamiltonian constraint F8 = 0
+[PASS] FLRW flat (k=0), comoving r: momentum constraint F9 = 0
+[PASS] FLRW flat (k=0), comoving r: F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] FLRW flat (k=0), comoving r: claimed K_A = -Derivative(a(t), t)/a(t)
+[PASS] FLRW flat (k=0), comoving r: claimed K_B = -Derivative(a(t), t)/a(t)
+[PASS] FLRW flat (k=0), comoving r: claimed U = r*Derivative(a(t), t)
+[PASS] FLRW flat (k=0), comoving r: claimed Gamma = 1
+[PASS] FLRW flat (k=0), comoving r: claimed M_MS = r**3*a(t)*Derivative(a(t), t)**2/2
+
+== FLRW closed (k=1), comoving r ==
+   alpha: 1
+   beta: 0
+   A: a(t)
+   R: a(t)*sin(r)
+   K_A: -Derivative(a(t), t)/a(t)
+   K_B: -Derivative(a(t), t)/a(t)
+   Gamma: cos(r)
+   U: sin(r)*Derivative(a(t), t)
+   M_MS: (Derivative(a(t), t)**2 + 1)*a(t)*sin(r)**3/2
+   R theta+: 2*sin(r)*Derivative(a(t), t) + 2*cos(r)
+   R theta-: 2*sin(r)*Derivative(a(t), t) - 2*cos(r)
+[PASS] FLRW closed (k=1), comoving r: Hamiltonian constraint F8 = 0
+[PASS] FLRW closed (k=1), comoving r: momentum constraint F9 = 0
+[PASS] FLRW closed (k=1), comoving r: F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] FLRW closed (k=1), comoving r: claimed K_A = -Derivative(a(t), t)/a(t)
+[PASS] FLRW closed (k=1), comoving r: claimed K_B = -Derivative(a(t), t)/a(t)
+[PASS] FLRW closed (k=1), comoving r: claimed U = sin(r)*Derivative(a(t), t)
+[PASS] FLRW closed (k=1), comoving r: claimed Gamma = cos(r)
+[PASS] FLRW closed (k=1), comoving r: claimed M_MS = (Derivative(a(t), t)**2/(2*a(t)**2) + 1/(2*a(t)**2))*a(t)**3*sin(r)**3
+
+== FLRW open (k=-1), comoving r ==
+   alpha: 1
+   beta: 0
+   A: a(t)
+   R: a(t)*sinh(r)
+   K_A: -Derivative(a(t), t)/a(t)
+   K_B: -Derivative(a(t), t)/a(t)
+   Gamma: cosh(r)
+   U: sinh(r)*Derivative(a(t), t)
+   M_MS: (Derivative(a(t), t)**2 - 1)*a(t)*sinh(r)**3/2
+   R theta+: 2*sinh(r)*Derivative(a(t), t) + 2*cosh(r)
+   R theta-: 2*sinh(r)*Derivative(a(t), t) - 2*cosh(r)
+[PASS] FLRW open (k=-1), comoving r: Hamiltonian constraint F8 = 0
+[PASS] FLRW open (k=-1), comoving r: momentum constraint F9 = 0
+[PASS] FLRW open (k=-1), comoving r: F13 (R theta+)(R theta-)/4 = 2M/R - 1
+[PASS] FLRW open (k=-1), comoving r: claimed K_A = -Derivative(a(t), t)/a(t)
+[PASS] FLRW open (k=-1), comoving r: claimed K_B = -Derivative(a(t), t)/a(t)
+[PASS] FLRW open (k=-1), comoving r: claimed U = sinh(r)*Derivative(a(t), t)
+[PASS] FLRW open (k=-1), comoving r: claimed Gamma = cosh(r)
+[PASS] FLRW open (k=-1), comoving r: claimed M_MS = (Derivative(a(t), t)**2/(2*a(t)**2) - 1/(2*a(t)**2))*a(t)**3*sinh(r)**3
+
+-- FLRW marginal spheres (a = 1 at the instant; H numeric) --
+[PASS] FLRW flat H=3/2: R theta- = 0 at r* = 0.666666666666667
+      other expansion sign +, inner -, outer +, Gamma=1.000  -> PAST_MOTS, ah_candidate=False
+      R* = 0.666667, H R* = 1.000000, 2M/R at root = 1.000000
+[PASS] FLRW flat H=-3/2: R theta+ = 0 at r* = 0.666666666666667
+      other expansion sign -, inner +, outer -, Gamma=1.000  -> FUTURE_MOTS, ah_candidate=False
+      R* = 0.666667, H R* = -1.000000, 2M/R at root = 1.000000
+[PASS] FLRW closed H=3/2: R theta+ = 0 at r* = 2.55359005004223
+      other expansion sign +, inner +, outer -, Gamma=-0.8321  -> PAST_MOTS, ah_candidate=False
+      R* = 0.554700, H R* = 0.832050, 2M/R at root = 1.000000
+[PASS] FLRW closed H=3/2: R theta- = 0 at r* = 0.588002603547568
+      other expansion sign +, inner -, outer +, Gamma=0.8321  -> PAST_MOTS, ah_candidate=False
+      R* = 0.554700, H R* = 0.832050, 2M/R at root = 1.000000
+[PASS] FLRW closed H=-3/2: R theta+ = 0 at r* = 0.588002603547568
+      other expansion sign -, inner +, outer -, Gamma=0.8321  -> FUTURE_MOTS, ah_candidate=False
+      R* = 0.554700, H R* = -0.832050, 2M/R at root = 1.000000
+[PASS] FLRW closed H=-3/2: R theta- = 0 at r* = 2.55359005004223
+      other expansion sign -, inner -, outer +, Gamma=-0.8321  -> FUTURE_MOTS, ah_candidate=False
+      R* = 0.554700, H R* = -0.832050, 2M/R at root = 1.000000
+[PASS] FLRW open H=3/2: R theta- = 0 at r* = 0.804718956217050
+      other expansion sign +, inner -, outer +, Gamma=1.342  -> PAST_MOTS, ah_candidate=False
+      R* = 0.894427, H R* = 1.341641, 2M/R at root = 1.000000
+[PASS] FLRW open H=-3/2: R theta+ = 0 at r* = 0.804718956217050
+      other expansion sign -, inner +, outer -, Gamma=1.342  -> FUTURE_MOTS, ah_candidate=False
+      R* = 0.894427, H R* = -1.341641, 2M/R at root = 1.000000
+[PASS] flat expanding: R theta- = 0 exactly at R = 1/H (Hubble sphere), where 2M/R = 1
+[PASS] open expanding: marginal sphere tanh(chi) = 1/(aH) (exists since aH > 1 when rho > 0)
+[PASS] closed expanding: theta- = 0 at tan(chi) = 1/(aH); theta+ = 0 at tan(chi) = -1/(aH) (chi > pi/2)
+[PASS] closed FLRW at turnaround (adot=0): R theta+ = 2 cos chi, R theta- = -2 cos chi -> (0,0) at chi = pi/2 with 2M/R = 1
+[PASS] tau-hyperboloid: R theta- ~ -tau/r -> 0^- as r -> oo (sign tolerance near the outer edge!)
+[PASS] Milne: R theta- = -2 e^{-chi} -> 0^-
+
+=== 93 PASS, 0 FAIL ===
+
+################ derivation/center.py ################
+== (1) regular centre, generic even/odd data (no conditions imposed) ==
+   Gamma: (R1*a0 - r**2*(R1*a2 - 3*R3*a0))/a0**2
+   r^2 * Ham, leading: 2*(-R1 + a0)*(R1 + a0)/(R1**2*a0**2)
+[PASS] Ham has a 1/r^2 pole with coefficient 2(1-Gamma0^2)/R1^2  -> finite only if Gamma(0)=1
+[PASS] Mom has a 1/r pole with coefficient -(K_A(0)-K_B(0))  -> finite only if K_A(0)=K_B(0)
+[PASS] j_r = -Pi phi' = -2 Pi0 phi2 r + O(r^3)  (odd, O(r))
+[PASS] M_MS without Gamma(0)=1: M ~ (R1/2)(1 - R1^2/a0^2) r  (O(r): conical defect mass)
+
+== regular centre with Gamma(0)=1 (R1 = a0) and K_A(0)=K_B(0) = k0 ==
+   Gamma: -(-3*R3*r**2 - a0 + a2*r**2)/a0
+[PASS] Gamma = 1 + O(r^2)
+   Gamma_2 (coefficient of r^2): -(-3*R3 + a2)/a0
+   Ham(0): -8*pi*Pi0**2 - 36*R3/a0**3 + 6*k0**2 - 8*pi*m**2*phi0**2 + 12*a2/a0**3
+   3R(0): 12*(-3*R3 + a2)/a0**3
+[PASS] 3R(0) = -12 Gamma_2 / a0^2  (Gamma_2 = coefficient of r^2 in Gamma)
+[PASS] Ham(0) = 3R(0) + 6 k0^2 - 16 pi rho(0)
+[PASS] Mom = O(r): no r^0 term
+   Mom, O(r) coefficient: -8*pi*Pi0*phi2 - kA2 + 3*kB2
+[PASS] M_MS = O(r^3): no r^1 term
+   lim M_MS/R^3: (-3*R3 + a0**3*k0**2/2 + a2)/a0**3
+[PASS] lim_{r->0} M_MS/R^3 = (4 pi/3) rho(0) + Ham(0)/12   [= (4pi/3)rho_c on shell]
+[PASS] lim M_MS/R^3 = 3R(0)/12 + k0^2/2  (pure geometry)
+[PASS] R theta+ = +2 - 2 a0 k0 r + O(r^2);  R theta- = -2 - 2 a0 k0 r + O(r^2)
+[PASS] U = -R K_B = -a0 k0 r + O(r^3)  (odd)
+[PASS] compactness 2M/R = O(r^2)
+[PASS] K_A - K_B = O(r^2) automatically once K_A(0)=K_B(0) (even data)
+[PASS] H_M = M' - 4piR^2(rho R' + U j_r) = O(r^2) at a regular centre
+[PASS] H_M leading coefficient = (a0^3/4) Ham(0)  (from corrected F10: +R^2R'/4 Ham)
+
+== (2) slope of R theta at a marginal sphere, reduced with the constraints ==
+[PASS] at theta+=0: s^a d_a (U + Gamma) = +[1 - 8 pi R^2 (rho - J)]/(2R) + c1 Ham + c2 Mom, J = j_r/A
+      c1, c2: (-R/4, -R/A)
+[PASS] at theta-=0: s^a d_a (U - Gamma) = -[1 - 8 pi R^2 (rho + J)]/(2R) + c1 Ham + c2 Mom, J = j_r/A
+      c1, c2: (R/4, -R/A)
+   => on shell, a theta+ root is crossed from - (inside) to + (outside) iff 8 pi R^2 (rho - J) < 1;
+      flat FLRW Hubble sphere (theta- root): 8 pi R^2 rho = 3 > 1 -> theta- goes - to + outward (past MOTS).
+
+=== 19 PASS, 0 FAIL ===

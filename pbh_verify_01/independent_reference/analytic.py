@@ -33,11 +33,22 @@ class _Fn:
         self._lim0 = None
 
     def lim0(self):
+        """value at r = 0: direct substitution if regular, else the limit r -> 0+ evaluated as the
+        expression at r = 1e-25 in 80-digit arithmetic (the expressions are analytic in r, so the
+        error is O(1e-25))."""
         if self._lim0 is None:
+            v = float("nan")
             try:
-                v = float(sp.limit(self.expr, r, 0, "+"))
+                d = self.expr.subs(r, 0)
+                if d.is_finite and not d.has(sp.nan, sp.zoo, sp.oo, -sp.oo):
+                    v = float(d)
             except Exception:
-                v = float("nan")
+                pass
+            if not np.isfinite(v):
+                import mpmath
+                with mpmath.workdps(80):
+                    f = sp.lambdify(r, self.expr, "mpmath")
+                    v = float(mpmath.re(f(mpmath.mpf("1e-25"))))
             self._lim0 = v
         return self._lim0
 
@@ -128,7 +139,7 @@ class SymSlice:
             if vals[i] == 0:
                 out.append(rr[i])
             elif vals[i] * vals[i + 1] < 0:
-                out.append(brentq(f, rr[i], rr[i + 1], xtol=1e-15, rtol=4e-16, maxiter=200))
+                out.append(brentq(f, rr[i], rr[i + 1], xtol=1e-15, rtol=1e-15, maxiter=200))
         return out
 
     def transformed(self, fmap, name=None):
@@ -232,10 +243,11 @@ def polynomial_scalar(A_coef=(1, 0.1, -0.004), phi_coef=(0.05, -0.01, 0.0007), P
 
 def manufactured():
     """D90 transcendental manufactured slice with arbitrary matter projections."""
-    A = sp.Rational(6, 5) + sp.Rational(3, 10) * sp.cos(sp.Rational(13, 10) * r) * sp.exp(-r**2 / 10)
+    # regular centre: A(0) = R'(0) = 1 (Gamma(0) = 1), K_A(0) = K_B(0); all parities respected
+    A = 1 + sp.Rational(3, 10) * (sp.cos(sp.Rational(13, 10) * r) - 1) * sp.exp(-r**2 / 10)
     R = r * (1 + sp.Rational(3, 20) * sp.sin(sp.Rational(7, 10) * r)**2)
-    KA = sp.Rational(1, 20) + sp.Rational(1, 10) * sp.cos(sp.Rational(9, 10) * r)
     KB = sp.Rational(2, 25) * sp.exp(-r**2 / 5) - sp.Rational(1, 50) * sp.cos(r / 2)
+    KA = KB + sp.Rational(1, 10) * (1 - sp.cos(sp.Rational(9, 10) * r))
     rho = sp.Rational(1, 50) * sp.exp(-r**2 / 3)
     jr = sp.Rational(1, 100) * r * sp.exp(-r**2 / 4)
     return SymSlice("manufactured", A, R, KA, KB, rho=rho, jr=jr,

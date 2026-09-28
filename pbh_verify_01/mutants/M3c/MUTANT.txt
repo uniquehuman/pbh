@@ -1,0 +1,2 @@
+M3c: potential coefficient m^2 phi^2 instead of m^2 phi^2 / 2
+matter.py: 'return 0.5 * self.m_phi ** 2 * self.phi ** 2' -> 'return self.m_phi ** 2 * self.phi ** 2'
