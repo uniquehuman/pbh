@@ -1,0 +1,125 @@
+{
+ "none": {
+  "failed": [],
+  "detected": null,
+  "clean": true
+ },
+ "F10sign": {
+  "failed": [
+   "M11",
+   "M12",
+   "S20",
+   "S21",
+   "X50",
+   "C60",
+   "T70",
+   "D90"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "jr_sign": {
+  "failed": [
+   "V02",
+   "X50",
+   "X51"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "jr_noA": {
+  "failed": [
+   "V02",
+   "X52"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "swap_theta": {
+  "failed": [
+   "V03",
+   "V04",
+   "M10",
+   "M11",
+   "M12",
+   "M13",
+   "S20",
+   "S21",
+   "S22",
+   "S23",
+   "S24",
+   "S25",
+   "F30",
+   "F31",
+   "F32",
+   "K40",
+   "K41",
+   "X50",
+   "X52",
+   "T70",
+   "Z80",
+   "D90"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "ah_nosides": {
+  "failed": [
+   "S25",
+   "F31"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "nan_ok": {
+  "failed": [
+   "R95"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "naive_mass": {
+  "failed": [
+   "X50",
+   "X51",
+   "X52"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "sigma_zero": {
+  "failed": [
+   "M13",
+   "S22",
+   "X50",
+   "X52",
+   "D90"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "order2": {
+  "failed": [
+   "V02",
+   "V03",
+   "M11",
+   "M12",
+   "M13",
+   "S20",
+   "S21",
+   "S22",
+   "F30",
+   "F31",
+   "X50",
+   "X51",
+   "X52",
+   "C60",
+   "T70",
+   "Z80",
+   "D90"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "all_ok": true
+}
