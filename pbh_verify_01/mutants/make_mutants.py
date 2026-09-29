@@ -29,7 +29,10 @@ MUTANTS = {
         (D, "M_flux = op.cumint(FOUR_PI * R ** 2 * U * j_r, +1)", "M_flux = 0.0 * op.cumint(FOUR_PI * R ** 2 * U * j_r, +1)")]),
     "M5": ("cosmological (past) marginal sphere accepted as AH candidate", [
         (D, 'ah = bool(which == "+" and rtype == FUTURE_MOTS and G_star > 0\n                  and inner == -1 and outer == 1)',
-            'ah = bool(rtype != DEGENERATE and G_star > 0\n                  and inner == -1 and outer == 1)')]),
+            'ah = bool(rtype != DEGENERATE and G_star > 0\n                  and inner == -1 and outer == 1)'),
+        # same defect expressed on the v0.2+ code (orientation-invariant rule of contract v1.1)
+        (D, "ah = bool(is_out and rtype == FUTURE_MOTS and smallR == -1 and largeR == 1)",
+            "ah = bool(rtype != DEGENERATE and smallR == -1 and largeR == 1)")]),
     "M7": ("NaN / invalid points treated as no collapse", [
         (D, "cls[invalid_pt] = INVALID", "cls[invalid_pt] = NORMAL"),
         (D, 'if data_status != "OK" or (cls == INVALID).any():\n        geometry = "UNDETERMINED"',
@@ -53,11 +56,17 @@ def main():
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(Path(a.src), dst, ignore=shutil.ignore_patterns("__pycache__"))
+        applied = 0
         for fn, old, new in edits:
             p = dst / "sphdiag" / fn
             s = p.read_text()
-            assert s.count(old) == 1, (mid, fn, old)
-            p.write_text(s.replace(old, new))
+            n = s.count(old)
+            assert n <= 1, (mid, fn, old)
+            if n == 1:
+                p.write_text(s.replace(old, new))
+                applied += 1
+        # every mutant must change the code; alternatives for other code versions may be absent
+        assert applied >= 1, (mid, "no edit applied")
         (Path(a.out) / mid / "MUTANT.txt").write_text(f"{mid}: {desc}\n" + "\n".join(f"{fn}: {o!r} -> {n!r}" for fn, o, n in edits) + "\n")
         print(mid, "ok:", desc)
 

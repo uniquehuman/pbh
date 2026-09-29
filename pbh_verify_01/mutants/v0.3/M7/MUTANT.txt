@@ -1,0 +1,3 @@
+M7: NaN / invalid points treated as no collapse
+diagnose.py: 'cls[invalid_pt] = INVALID' -> 'cls[invalid_pt] = NORMAL'
+diagnose.py: 'if data_status != "OK" or (cls == INVALID).any():\n        geometry = "UNDETERMINED"' -> 'if False:\n        geometry = "UNDETERMINED"'

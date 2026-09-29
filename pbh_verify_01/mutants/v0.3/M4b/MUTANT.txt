@@ -1,0 +1,3 @@
+M4b: flux term omitted (mass form and integral mass)
+diagnose.py: '-FOUR_PI * R ** 2 * U * j_r)' -> '0.0 * j_r)'
+diagnose.py: 'M_flux = op.cumint(FOUR_PI * R ** 2 * U * j_r, +1)' -> 'M_flux = 0.0 * op.cumint(FOUR_PI * R ** 2 * U * j_r, +1)'

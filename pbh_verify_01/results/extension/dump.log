@@ -1,0 +1,5 @@
+mu=0.36 K=2000 t_H=244.949; LTB t_C(0)=8.030 t_H
+t= 11.722 t_H clipped= 0 V1 AH: none | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.0e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.5e-05/2.4e-05
+t= 11.842 t_H clipped= 0 V1 AH: R=0.6995 M=0.3744 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.4e-13 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.5e-05/2.4e-05
+t= 11.963 t_H clipped= 1 V1 AH: R=1.408 M=0.759 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.9e-13 | Linf_rel ham/mom/hamM bulk 2.6e-05/3.4e-05/2.6e-05
+done: steps=1968 wall=91.7s; V1 first AH: {'t': np.float64(2900.723892919309), 'R_AH': 0.6994963733682346, 'M_AH': 0.3744483058577116, 'x_AH': 0.0008975810949087359}

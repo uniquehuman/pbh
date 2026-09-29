@@ -1,0 +1,111 @@
+{
+ "args": {
+  "mu": 0.36,
+  "K": 4000,
+  "n": 4,
+  "stretch": 4.0,
+  "xout": 5.0,
+  "tend": 6.05,
+  "dR": 0.0,
+  "tstart": 6.0,
+  "diag": 10,
+  "out": "results/extension/Kscan",
+  "dump": ""
+ },
+ "t_H": 244.94897427831768,
+ "v1_first_AH": {},
+ "records": [
+  {
+   "t_over_tH": 6.0133360144260335,
+   "a": 496.0227248866352,
+   "n_clipped": 0,
+   "x_clipped_max_over_rm": 0.0,
+   "v1_AH": null,
+   "sphdiag_status": {
+    "data": "OK",
+    "constraints": "VIOLATED",
+    "geometry": "PAST_TRAPPED_ONLY"
+   },
+   "sphdiag_outer_ah": null,
+   "n_ah_candidates": 0,
+   "classes": {
+    "CENTER": 1,
+    "NORMAL": 2931,
+    "PAST_TRAPPED": 1069
+   },
+   "max_rel_M_vs_m_unclipped": 3.2163357406897085e-10,
+   "M_at_clipped": [],
+   "norms": {
+    "ham": {
+     "center": 0.1718360346054644,
+     "bulk": 9.272305188319591e-06,
+     "outer": 0.002519538202715524
+    },
+    "mom": {
+     "center": 0.07769244399495513,
+     "bulk": 2.18144530665921e-05,
+     "outer": 0.003861445798076922
+    },
+    "hamM": {
+     "center": 0.3024664702402258,
+     "bulk": 9.256796619803211e-06,
+     "outer": 0.0025342338826756412
+    }
+   },
+   "n_violated": {
+    "ham": 1348,
+    "mom": 1840,
+    "hamM": 1394
+   },
+   "warnings": [
+    "M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = 2.185e-06"
+   ]
+  },
+  {
+   "t_over_tH": 6.05,
+   "a": 498.03688578580875,
+   "n_clipped": 0,
+   "x_clipped_max_over_rm": 0.0,
+   "v1_AH": null,
+   "sphdiag_status": {
+    "data": "OK",
+    "constraints": "VIOLATED",
+    "geometry": "PAST_TRAPPED_ONLY"
+   },
+   "sphdiag_outer_ah": null,
+   "n_ah_candidates": 0,
+   "classes": {
+    "CENTER": 1,
+    "NORMAL": 2933,
+    "PAST_TRAPPED": 1067
+   },
+   "max_rel_M_vs_m_unclipped": 2.640688058132703e-10,
+   "M_at_clipped": [],
+   "norms": {
+    "ham": {
+     "center": 0.1697210009652779,
+     "bulk": 9.319333571980371e-06,
+     "outer": 0.002531191228423158
+    },
+    "mom": {
+     "center": 0.3171456927569268,
+     "bulk": 2.1669877986811416e-05,
+     "outer": 0.0038430868660118585
+    },
+    "hamM": {
+     "center": 0.2975936125426941,
+     "bulk": 9.303876758308603e-06,
+     "outer": 0.002546013312442802
+    }
+   },
+   "n_violated": {
+    "ham": 1355,
+    "mom": 1842,
+    "hamM": 1409
+   },
+   "warnings": [
+    "M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = 2.196e-06"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,3 @@
+M10: Gamma = R'/A^2 (gamma_rr instead of sqrt)
+diagnose.py: 'Gamma = dR / A\n' -> 'Gamma = dR / A ** 2\n'
+diagnose.py: 'Gamma6 = dR6 / A' -> 'Gamma6 = dR6 / A ** 2'

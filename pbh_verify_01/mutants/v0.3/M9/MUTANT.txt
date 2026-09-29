@@ -1,0 +1,2 @@
+M9: 2nd-order primary derivative instead of 4th
+fd.py: 'self._stencils[order] = self._build(order + 1, deriv=1)' -> 'self._stencils[order] = self._build(3 if order == 4 else order + 1, deriv=1)'

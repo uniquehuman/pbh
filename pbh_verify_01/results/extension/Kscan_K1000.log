@@ -1,0 +1,3 @@
+mu=0.36 K=1000 t_H=244.949; LTB t_C(0)=8.030 t_H
+t=  6.011 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.6e-11 | Linf_rel ham/mom/hamM bulk 1.2e-05/1.2e-04/1.2e-05
+done: steps=694 wall=29.5s; V1 first AH: None

@@ -1,0 +1,3 @@
+M5: cosmological (past) marginal sphere accepted as AH candidate
+diagnose.py: 'ah = bool(which == "+" and rtype == FUTURE_MOTS and G_star > 0\n                  and inner == -1 and outer == 1)' -> 'ah = bool(rtype != DEGENERATE and G_star > 0\n                  and inner == -1 and outer == 1)'
+diagnose.py: 'ah = bool(is_out and rtype == FUTURE_MOTS and smallR == -1 and largeR == 1)' -> 'ah = bool(rtype != DEGENERATE and smallR == -1 and largeR == 1)'

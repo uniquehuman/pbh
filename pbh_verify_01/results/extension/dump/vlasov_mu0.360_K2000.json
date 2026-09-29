@@ -1,0 +1,180 @@
+{
+ "args": {
+  "mu": 0.36,
+  "K": 2000,
+  "n": 4,
+  "stretch": 4.0,
+  "xout": 5.0,
+  "tend": 12.0,
+  "tstart": 11.7,
+  "diag": 20,
+  "out": "results/extension/dump",
+  "dump": "11.7,12.0"
+ },
+ "t_H": 244.94897427831768,
+ "v1_first_AH": {
+  "t": 2900.723892919309,
+  "R_AH": 0.6994963733682346,
+  "M_AH": 0.3744483058577116,
+  "x_AH": 0.0008975810949087359
+ },
+ "records": [
+  {
+   "t_over_tH": 11.722087551870972,
+   "a": 774.0361300320242,
+   "n_clipped": 0,
+   "x_clipped_max_over_rm": 0.0,
+   "v1_AH": null,
+   "sphdiag_status": {
+    "data": "OK",
+    "constraints": "VIOLATED",
+    "geometry": "UNCERTAIN"
+   },
+   "sphdiag_outer_ah": null,
+   "n_ah_candidates": 0,
+   "classes": {
+    "CENTER": 1,
+    "DOUBLY_MARGINAL": 3,
+    "FUTURE_MARGINAL": 1,
+    "NORMAL": 1597,
+    "PAST_TRAPPED": 399
+   },
+   "max_rel_M_vs_m_unclipped": 1.016558732624269e-12,
+   "M_at_clipped": [],
+   "norms": {
+    "ham": {
+     "center": 0.19984993128140072,
+     "bulk": 2.3916194222959763e-05,
+     "outer": 0.0054015263667626665
+    },
+    "mom": {
+     "center": 0.15107100177513966,
+     "bulk": 3.48007923882421e-05,
+     "outer": 0.006221171403400137
+    },
+    "hamM": {
+     "center": 0.3528629229021052,
+     "bulk": 2.411472867645806e-05,
+     "outer": 0.005466491907796494
+    }
+   },
+   "n_violated": {
+    "ham": 638,
+    "mom": 858,
+    "hamM": 696
+   },
+   "warnings": [
+    "M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = 1.064e-05"
+   ]
+  },
+  {
+   "t_over_tH": 11.842155703919902,
+   "a": 779.3127298869389,
+   "n_clipped": 0,
+   "x_clipped_max_over_rm": 0.0,
+   "v1_AH": {
+    "R_AH": 0.6994963733682346,
+    "M_AH": 0.3744483058577116,
+    "x_AH": 0.0008975810949087359
+   },
+   "sphdiag_status": {
+    "data": "OK",
+    "constraints": "VIOLATED",
+    "geometry": "PAST_TRAPPED_ONLY"
+   },
+   "sphdiag_outer_ah": null,
+   "n_ah_candidates": 0,
+   "classes": {
+    "CENTER": 1,
+    "DOUBLY_MARGINAL": 5,
+    "NORMAL": 1598,
+    "PAST_TRAPPED": 397
+   },
+   "max_rel_M_vs_m_unclipped": 7.409067336601653e-13,
+   "M_at_clipped": [],
+   "norms": {
+    "ham": {
+     "center": 0.16551444996614925,
+     "bulk": 2.4122064488913715e-05,
+     "outer": 0.00544240051297435
+    },
+    "mom": {
+     "center": 0.3482851377702022,
+     "bulk": 3.455925600629448e-05,
+     "outer": 0.006185456252202045
+    },
+    "hamM": {
+     "center": 0.3381791994270169,
+     "bulk": 2.4461982489244876e-05,
+     "outer": 0.005508400332787495
+    }
+   },
+   "n_violated": {
+    "ham": 635,
+    "mom": 837,
+    "hamM": 701
+   },
+   "warnings": [
+    "M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = 7.691e-06"
+   ]
+  },
+  {
+   "t_over_tH": 11.962770355855803,
+   "a": 784.5954217601184,
+   "n_clipped": 1,
+   "x_clipped_max_over_rm": 0.0003664359475491738,
+   "v1_AH": {
+    "R_AH": 1.4084788524006668,
+    "M_AH": 0.7589963431280308,
+    "x_AH": 0.0017951657801430483
+   },
+   "sphdiag_status": {
+    "data": "OK",
+    "constraints": "VIOLATED",
+    "geometry": "PAST_TRAPPED_ONLY"
+   },
+   "sphdiag_outer_ah": null,
+   "n_ah_candidates": 0,
+   "classes": {
+    "CENTER": 1,
+    "DOUBLY_MARGINAL": 4,
+    "FUTURE_MARGINAL": 1,
+    "NORMAL": 1600,
+    "PAST_TRAPPED": 395
+   },
+   "max_rel_M_vs_m_unclipped": 7.895947568254346e-13,
+   "M_at_clipped": [
+    [
+     0.0003664359475491738,
+     0.38362375319811715,
+     0.3835163517301155
+    ]
+   ],
+   "norms": {
+    "ham": {
+     "center": 0.5063276579753164,
+     "bulk": 2.5603037641389583e-05,
+     "outer": 0.005483295307899812
+    },
+    "mom": {
+     "center": 0.40259677699704616,
+     "bulk": 3.432124688714786e-05,
+     "outer": 0.006150895494701354
+    },
+    "hamM": {
+     "center": 0.6428556350763855,
+     "bulk": 2.608011417170161e-05,
+     "outer": 0.00555034110002706
+    }
+   },
+   "n_violated": {
+    "ham": 613,
+    "mom": 821,
+    "hamM": 687
+   },
+   "warnings": [
+    "M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = 2.260e-05"
+   ]
+  }
+ ]
+}

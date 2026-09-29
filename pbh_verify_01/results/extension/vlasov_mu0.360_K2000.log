@@ -1,0 +1,46 @@
+mu=0.36 K=2000 t_H=244.949; LTB t_C(0)=8.030 t_H
+t=  7.569 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 9.0e-11 | Linf_rel ham/mom/hamM bulk 1.4e-05/4.8e-05/1.4e-05
+t=  7.711 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.4e-11 | Linf_rel ham/mom/hamM bulk 1.4e-05/4.7e-05/1.4e-05
+t=  7.850 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.8e-11 | Linf_rel ham/mom/hamM bulk 1.4e-05/4.6e-05/1.4e-05
+t=  7.989 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 3.4e-11 | Linf_rel ham/mom/hamM bulk 1.5e-05/4.6e-05/1.5e-05
+t=  8.126 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.0e-11 | Linf_rel ham/mom/hamM bulk 1.5e-05/4.5e-05/1.5e-05
+t=  8.262 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 3.9e-11 | Linf_rel ham/mom/hamM bulk 1.5e-05/4.5e-05/1.5e-05
+t=  8.397 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.1e-11 | Linf_rel ham/mom/hamM bulk 1.5e-05/4.4e-05/1.5e-05
+t=  8.530 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.3e-11 | Linf_rel ham/mom/hamM bulk 1.5e-05/4.4e-05/1.5e-05
+t=  8.663 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 3.9e-11 | Linf_rel ham/mom/hamM bulk 1.6e-05/4.3e-05/1.6e-05
+t=  8.794 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 2.2e-11 | Linf_rel ham/mom/hamM bulk 1.6e-05/4.3e-05/1.6e-05
+t=  8.924 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 2.3e-11 | Linf_rel ham/mom/hamM bulk 1.6e-05/4.2e-05/1.6e-05
+t=  9.053 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 2.0e-11 | Linf_rel ham/mom/hamM bulk 1.6e-05/4.2e-05/1.6e-05
+t=  9.181 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 3.2e-11 | Linf_rel ham/mom/hamM bulk 1.6e-05/4.1e-05/1.6e-05
+t=  9.308 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.8e-11 | Linf_rel ham/mom/hamM bulk 1.7e-05/4.1e-05/1.7e-05
+t=  9.434 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.2e-11 | Linf_rel ham/mom/hamM bulk 1.7e-05/4.1e-05/1.7e-05
+t=  9.559 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.6e-11 | Linf_rel ham/mom/hamM bulk 1.7e-05/4.0e-05/1.7e-05
+t=  9.683 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.6e-11 | Linf_rel ham/mom/hamM bulk 1.7e-05/4.0e-05/1.7e-05
+t=  9.806 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.3e-11 | Linf_rel ham/mom/hamM bulk 1.7e-05/3.9e-05/1.7e-05
+t=  9.929 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.3e-11 | Linf_rel ham/mom/hamM bulk 1.8e-05/3.9e-05/1.8e-05
+t= 10.051 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.5e-12 | Linf_rel ham/mom/hamM bulk 1.8e-05/3.9e-05/1.8e-05
+t= 10.172 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.0e-12 | Linf_rel ham/mom/hamM bulk 1.8e-05/3.8e-05/1.8e-05
+t= 10.292 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.2e-12 | Linf_rel ham/mom/hamM bulk 1.8e-05/3.8e-05/1.8e-05
+t= 10.413 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.7e-12 | Linf_rel ham/mom/hamM bulk 1.8e-05/3.8e-05/1.8e-05
+t= 10.532 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 2.3e-12 | Linf_rel ham/mom/hamM bulk 1.8e-05/3.7e-05/1.8e-05
+t= 10.652 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 2.8e-12 | Linf_rel ham/mom/hamM bulk 1.9e-05/3.7e-05/1.9e-05
+t= 10.771 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.8e-12 | Linf_rel ham/mom/hamM bulk 1.9e-05/3.7e-05/1.9e-05
+t= 10.889 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.5e-12 | Linf_rel ham/mom/hamM bulk 1.9e-05/3.7e-05/1.9e-05
+t= 11.008 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 8.2e-13 | Linf_rel ham/mom/hamM bulk 1.9e-05/3.6e-05/1.9e-05
+t= 11.127 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.9e-13 | Linf_rel ham/mom/hamM bulk 2.0e-05/3.6e-05/2.0e-05
+t= 11.245 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.1e-13 | Linf_rel ham/mom/hamM bulk 2.0e-05/3.6e-05/2.0e-05
+t= 11.364 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 8.1e-13 | Linf_rel ham/mom/hamM bulk 2.3e-05/3.6e-05/2.3e-05
+t= 11.483 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.5e-13 | Linf_rel ham/mom/hamM bulk 2.3e-05/3.5e-05/2.3e-05
+t= 11.602 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 9.0e-13 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.5e-05/2.5e-05
+t= 11.722 t_H clipped= 0 V1 AH: none | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 1.0e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.5e-05/2.4e-05
+t= 11.842 t_H clipped= 0 V1 AH: R=0.6995 M=0.3744 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.4e-13 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.5e-05/2.4e-05
+t= 11.963 t_H clipped= 1 V1 AH: R=1.408 M=0.759 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.9e-13 | Linf_rel ham/mom/hamM bulk 2.6e-05/3.4e-05/2.6e-05
+t= 12.084 t_H clipped= 1 V1 AH: R=2.127 M=1.118 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 8.3e-13 | Linf_rel ham/mom/hamM bulk 2.6e-05/3.4e-05/2.7e-05
+t= 12.206 t_H clipped= 2 V1 AH: R=2.855 M=1.49 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 8.3e-13 | Linf_rel ham/mom/hamM bulk 2.7e-05/3.4e-05/2.7e-05
+t= 12.328 t_H clipped= 2 V1 AH: R=3.593 M=1.855 | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 8.0e-13 | Linf_rel ham/mom/hamM bulk 2.6e-05/3.4e-05/2.7e-05
+t= 12.452 t_H clipped= 2 V1 AH: R=4.34 M=2.226 | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 7.7e-13 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.3e-05/2.5e-05
+t= 12.576 t_H clipped= 2 V1 AH: R=5.097 M=2.605 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.423 [5.327,5.519] M=2.712 | max|M-m|/m (unclipped) 8.3e-13 | Linf_rel ham/mom/hamM bulk 2.6e-05/3.3e-05/2.7e-05
+t= 12.701 t_H clipped= 2 V1 AH: R=5.864 M=2.99 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=6.226 [6.194,6.259] M=3.113 | max|M-m|/m (unclipped) 8.9e-13 | Linf_rel ham/mom/hamM bulk 2.5e-05/3.3e-05/2.9e-05
+t= 12.827 t_H clipped= 2 V1 AH: R=6.64 M=3.382 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=7.052 [7.046,7.059] M=3.526 | max|M-m|/m (unclipped) 8.6e-13 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.3e-05/2.9e-05
+t= 12.954 t_H clipped= 2 V1 AH: R=7.427 M=3.78 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=7.898 [7.896,7.904] M=3.949 | max|M-m|/m (unclipped) 8.3e-13 | Linf_rel ham/mom/hamM bulk 2.6e-05/3.3e-05/3.1e-05
+done: steps=2129 wall=134.5s; V1 first AH: {'t': np.float64(2900.723892919309), 'R_AH': 0.6994963733682346, 'M_AH': 0.3744483058577116, 'x_AH': 0.0008975810949087359}

@@ -1,0 +1,64 @@
+mu=0.1 K=2000 t_H=244.949; LTB t_C(0)=25.144 t_H
+t= 27.607 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.3e-12 | Linf_rel ham/mom/hamM bulk 3.0e-05/2.2e-05/2.9e-05
+t= 27.638 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.8e-12 | Linf_rel ham/mom/hamM bulk 2.8e-05/2.3e-05/2.8e-05
+t= 27.668 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.3e-12 | Linf_rel ham/mom/hamM bulk 3.1e-05/2.0e-05/3.1e-05
+t= 27.696 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.6e-12 | Linf_rel ham/mom/hamM bulk 2.8e-05/2.1e-05/2.8e-05
+t= 27.722 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.0e-12 | Linf_rel ham/mom/hamM bulk 3.3e-05/2.4e-05/3.3e-05
+t= 27.749 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.7e-12 | Linf_rel ham/mom/hamM bulk 3.4e-05/2.4e-05/3.4e-05
+t= 27.775 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.1e-12 | Linf_rel ham/mom/hamM bulk 3.1e-05/2.6e-05/3.2e-05
+t= 27.802 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.9e-12 | Linf_rel ham/mom/hamM bulk 2.7e-05/2.7e-05/2.8e-05
+t= 27.828 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.7e-12 | Linf_rel ham/mom/hamM bulk 2.5e-05/2.1e-05/2.5e-05
+t= 27.854 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.9e-12 | Linf_rel ham/mom/hamM bulk 2.6e-05/2.4e-05/2.7e-05
+t= 27.880 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.6e-12 | Linf_rel ham/mom/hamM bulk 2.6e-05/2.6e-05/2.8e-05
+t= 27.906 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.8e-12 | Linf_rel ham/mom/hamM bulk 2.8e-05/2.8e-05/3.3e-05
+t= 27.931 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.5e-12 | Linf_rel ham/mom/hamM bulk 2.9e-05/3.0e-05/3.5e-05
+t= 27.956 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.5e-12 | Linf_rel ham/mom/hamM bulk 2.7e-05/2.7e-05/3.2e-05
+t= 27.981 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.3e-12 | Linf_rel ham/mom/hamM bulk 2.6e-05/2.8e-05/3.1e-05
+t= 28.007 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.4e-12 | Linf_rel ham/mom/hamM bulk 2.8e-05/2.3e-05/3.3e-05
+t= 28.032 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.2e-12 | Linf_rel ham/mom/hamM bulk 2.8e-05/2.4e-05/3.6e-05
+t= 28.060 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.5e-12 | Linf_rel ham/mom/hamM bulk 3.0e-05/2.6e-05/3.9e-05
+t= 28.089 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.3e-12 | Linf_rel ham/mom/hamM bulk 2.6e-05/2.9e-05/3.5e-05
+t= 28.119 t_H clipped= 0 V1 AH: none | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.6e-12 | Linf_rel ham/mom/hamM bulk 3.0e-05/3.2e-05/4.2e-05
+t= 28.144 t_H clipped= 0 V1 AH: R=0.3017 M=0.1599 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.9e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/3.3e-05/3.4e-05
+t= 28.174 t_H clipped= 1 V1 AH: R=0.6039 M=0.3432 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.3e-12 | Linf_rel ham/mom/hamM bulk 2.3e-05/2.7e-05/3.1e-05
+t= 28.207 t_H clipped= 2 V1 AH: R=0.9065 M=0.4836 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.0e-12 | Linf_rel ham/mom/hamM bulk 2.1e-05/2.1e-05/2.7e-05
+t= 28.239 t_H clipped= 2 V1 AH: R=0.9072 M=0.5403 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 6.3e-12 | Linf_rel ham/mom/hamM bulk 2.1e-05/2.3e-05/2.8e-05
+t= 28.271 t_H clipped= 3 V1 AH: R=1.211 M=0.6788 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.9e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/2.5e-05/3.2e-05
+t= 28.303 t_H clipped= 3 V1 AH: R=1.211 M=0.7263 | sphdiag PAST_TRAPPED_ONLY/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.2e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/2.8e-05/3.5e-05
+t= 28.336 t_H clipped= 4 V1 AH: R=1.515 M=0.8188 | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.3e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/2.6e-05/3.9e-05
+t= 28.368 t_H clipped= 4 V1 AH: R=1.82 M=0.9231 | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 5.7e-12 | Linf_rel ham/mom/hamM bulk 2.3e-05/2.4e-05/4.9e-05
+t= 28.401 t_H clipped= 4 V1 AH: R=1.821 M=0.9767 | sphdiag UNCERTAIN/VIOLATED/OK no candidate | max|M-m|/m (unclipped) 4.4e-12 | Linf_rel ham/mom/hamM bulk 2.5e-05/2.3e-05/5.1e-05
+t= 28.433 t_H clipped= 5 V1 AH: R=1.823 M=1.032 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.109 [1.864,2.43] M=1.055 | max|M-m|/m (unclipped) 5.2e-12 | Linf_rel ham/mom/hamM bulk 2.0e-05/2.1e-05/4.3e-05
+t= 28.466 t_H clipped= 5 V1 AH: R=2.128 M=1.115 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.238 [2.117,2.36] M=1.12 | max|M-m|/m (unclipped) 4.9e-12 | Linf_rel ham/mom/hamM bulk 2.0e-05/1.9e-05/3.4e-05
+t= 28.498 t_H clipped= 5 V1 AH: R=2.13 M=1.159 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.339 [2.111,2.568] M=1.171 | max|M-m|/m (unclipped) 4.6e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/1.7e-05/3.6e-05
+t= 28.531 t_H clipped= 6 V1 AH: R=2.436 M=1.229 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.461 [2.131,2.827] M=1.23 | max|M-m|/m (unclipped) 5.3e-12 | Linf_rel ham/mom/hamM bulk 2.1e-05/2.0e-05/4.0e-05
+t= 28.563 t_H clipped= 6 V1 AH: R=2.438 M=1.294 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.605 [2.435,2.775] M=1.302 | max|M-m|/m (unclipped) 4.5e-12 | Linf_rel ham/mom/hamM bulk 2.3e-05/2.1e-05/5.1e-05
+t= 28.596 t_H clipped= 6 V1 AH: R=2.44 M=1.347 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.722 [2.572,2.872] M=1.361 | max|M-m|/m (unclipped) 5.7e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/2.2e-05/5.5e-05
+t= 28.628 t_H clipped= 6 V1 AH: R=2.747 M=1.408 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.825 [2.448,3.201] M=1.412 | max|M-m|/m (unclipped) 4.5e-12 | Linf_rel ham/mom/hamM bulk 2.1e-05/2.4e-05/5.4e-05
+t= 28.661 t_H clipped= 7 V1 AH: R=2.749 M=1.466 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=2.954 [2.658,3.25] M=1.477 | max|M-m|/m (unclipped) 4.8e-12 | Linf_rel ham/mom/hamM bulk 1.8e-05/2.5e-05/4.5e-05
+t= 28.693 t_H clipped= 7 V1 AH: R=3.057 M=1.541 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.084 [2.934,3.234] M=1.542 | max|M-m|/m (unclipped) 4.6e-12 | Linf_rel ham/mom/hamM bulk 1.7e-05/2.7e-05/4.6e-05
+t= 28.726 t_H clipped= 7 V1 AH: R=3.059 M=1.591 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.193 [2.993,3.393] M=1.597 | max|M-m|/m (unclipped) 4.8e-12 | Linf_rel ham/mom/hamM bulk 1.4e-05/2.6e-05/3.5e-05
+t= 28.758 t_H clipped= 7 V1 AH: R=3.061 M=1.639 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.306 [2.981,3.631] M=1.653 | max|M-m|/m (unclipped) 4.7e-12 | Linf_rel ham/mom/hamM bulk 1.2e-05/2.4e-05/3.2e-05
+t= 28.791 t_H clipped= 8 V1 AH: R=3.37 M=1.716 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.438 [3.222,3.655] M=1.719 | max|M-m|/m (unclipped) 4.0e-12 | Linf_rel ham/mom/hamM bulk 1.1e-05/1.9e-05/2.4e-05
+t= 28.824 t_H clipped= 8 V1 AH: R=3.373 M=1.772 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.561 [3.45,3.671] M=1.78 | max|M-m|/m (unclipped) 6.2e-12 | Linf_rel ham/mom/hamM bulk 1.1e-05/1.1e-05/2.2e-05
+t= 28.856 t_H clipped= 8 V1 AH: R=3.375 M=1.822 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.675 [3.48,3.87] M=1.838 | max|M-m|/m (unclipped) 5.1e-12 | Linf_rel ham/mom/hamM bulk 1.1e-05/1.2e-05/2.2e-05
+t= 28.889 t_H clipped= 9 V1 AH: R=3.685 M=1.888 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.785 [3.469,4.101] M=1.893 | max|M-m|/m (unclipped) 5.0e-12 | Linf_rel ham/mom/hamM bulk 1.1e-05/2.1e-05/2.7e-05
+t= 28.921 t_H clipped= 9 V1 AH: R=3.688 M=1.944 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=3.909 [3.782,4.036] M=1.955 | max|M-m|/m (unclipped) 4.8e-12 | Linf_rel ham/mom/hamM bulk 1.2e-05/2.4e-05/3.4e-05
+t= 28.954 t_H clipped= 9 V1 AH: R=3.998 M=2.011 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.023 [3.902,4.145] M=2.012 | max|M-m|/m (unclipped) 3.9e-12 | Linf_rel ham/mom/hamM bulk 1.3e-05/2.5e-05/4.2e-05
+t= 28.987 t_H clipped= 9 V1 AH: R=4.001 M=2.06 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.131 [3.912,4.35] M=2.065 | max|M-m|/m (unclipped) 4.5e-12 | Linf_rel ham/mom/hamM bulk 1.6e-05/2.8e-05/5.3e-05
+t= 29.019 t_H clipped=10 V1 AH: R=4.004 M=2.112 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.247 [4.004,4.477] M=2.123 | max|M-m|/m (unclipped) 4.6e-12 | Linf_rel ham/mom/hamM bulk 1.9e-05/2.8e-05/6.4e-05
+t= 29.052 t_H clipped=10 V1 AH: R=4.316 M=2.183 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.371 [4.273,4.469] M=2.185 | max|M-m|/m (unclipped) 4.1e-12 | Linf_rel ham/mom/hamM bulk 2.0e-05/2.7e-05/6.5e-05
+t= 29.085 t_H clipped=10 V1 AH: R=4.319 M=2.235 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.486 [4.383,4.589] M=2.243 | max|M-m|/m (unclipped) 5.3e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/2.6e-05/7.5e-05
+t= 29.117 t_H clipped=10 V1 AH: R=4.322 M=2.285 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.597 [4.435,4.76] M=2.299 | max|M-m|/m (unclipped) 4.4e-12 | Linf_rel ham/mom/hamM bulk 2.5e-05/2.5e-05/8.5e-05
+t= 29.150 t_H clipped=10 V1 AH: R=4.634 M=2.354 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.714 [4.548,4.881] M=2.357 | max|M-m|/m (unclipped) 4.8e-12 | Linf_rel ham/mom/hamM bulk 2.7e-05/2.2e-05/1.0e-04
+t= 29.183 t_H clipped=11 V1 AH: R=4.638 M=2.41 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.838 [4.785,4.892] M=2.419 | max|M-m|/m (unclipped) 3.8e-12 | Linf_rel ham/mom/hamM bulk 2.7e-05/2.1e-05/1.0e-04
+t= 29.216 t_H clipped=11 V1 AH: R=4.951 M=2.478 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=4.955 [4.864,5.047] M=2.478 | max|M-m|/m (unclipped) 3.7e-12 | Linf_rel ham/mom/hamM bulk 2.6e-05/1.9e-05/8.7e-05
+t= 29.249 t_H clipped=11 V1 AH: R=4.955 M=2.53 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.07 [4.955,5.177] M=2.535 | max|M-m|/m (unclipped) 3.9e-12 | Linf_rel ham/mom/hamM bulk 2.5e-05/1.9e-05/7.7e-05
+t= 29.281 t_H clipped=11 V1 AH: R=4.958 M=2.583 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.188 [5.121,5.256] M=2.594 | max|M-m|/m (unclipped) 4.8e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/1.8e-05/6.4e-05
+t= 29.314 t_H clipped=12 V1 AH: R=5.272 M=2.655 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.313 [5.286,5.34] M=2.656 | max|M-m|/m (unclipped) 3.9e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/1.6e-05/5.0e-05
+t= 29.347 t_H clipped=12 V1 AH: R=5.276 M=2.709 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.432 [5.386,5.478] M=2.716 | max|M-m|/m (unclipped) 4.0e-12 | Linf_rel ham/mom/hamM bulk 2.3e-05/1.6e-05/3.8e-05
+t= 29.380 t_H clipped=12 V1 AH: R=5.28 M=2.761 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.549 [5.511,5.587] M=2.775 | max|M-m|/m (unclipped) 3.9e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/1.5e-05/3.5e-05
+t= 29.413 t_H clipped=12 V1 AH: R=5.595 M=2.831 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.67 [5.648,5.692] M=2.835 | max|M-m|/m (unclipped) 4.5e-12 | Linf_rel ham/mom/hamM bulk 2.4e-05/1.5e-05/4.4e-05
+t= 29.446 t_H clipped=13 V1 AH: R=5.6 M=2.888 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.794 [5.783,5.806] M=2.897 | max|M-m|/m (unclipped) 4.4e-12 | Linf_rel ham/mom/hamM bulk 2.3e-05/1.5e-05/6.0e-05
+t= 29.479 t_H clipped=13 V1 AH: R=5.915 M=2.958 | sphdiag AH_CANDIDATE/VIOLATED/OK outer AH R=5.916 [5.904,5.928] M=2.958 | max|M-m|/m (unclipped) 4.0e-12 | Linf_rel ham/mom/hamM bulk 2.2e-05/1.8e-05/8.1e-05
+done: steps=3334 wall=225.5s; V1 first AH: {'t': np.float64(6893.851663542177), 'R_AH': 0.30171326660653436, 'M_AH': 0.15991682665176057, 'x_AH': 0.00021739302633485446}
