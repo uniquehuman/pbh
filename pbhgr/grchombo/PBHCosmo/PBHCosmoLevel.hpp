@@ -6,7 +6,7 @@
 #include "DefaultLevelFactory.hpp"
 #include "GRAMRLevel.hpp"
 #include "Potential.hpp"
-#include "ScalarField.hpp"
+#include "ScalarFieldRef.hpp"
 
 /*! Massive real scalar field (dust proxy) on a late-start spherical slice from the LTB solution,
  *  evolved with BSSN/CCZ4 and the cosmological moving-puncture gauge (K - <K>); AH finder on. */
@@ -16,7 +16,7 @@ class PBHCosmoLevel : public GRAMRLevel
     using GRAMRLevel::GRAMRLevel;
 
     CosmoAMR &m_cosmo_amr = dynamic_cast<CosmoAMR &>(m_gr_amr);
-    typedef ScalarField<Potential> ScalarFieldWithPotential;
+    typedef ScalarFieldRef ScalarFieldWithPotential;
 
     virtual void specificAdvance() override;
     virtual void initialData() override;

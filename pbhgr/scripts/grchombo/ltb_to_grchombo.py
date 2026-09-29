@@ -56,7 +56,7 @@ min_box_size = {box}
 tag_buffer_size = 3
 
 isPeriodic = 1 1 1
-vars_parity            = 0 0 4 6 0 5 0    0 0 4 6 0 5 0    0 1 2 3    0 1 2 3 1 2 3    0 0
+vars_parity            = 0 0 4 6 0 5 0    0 0 4 6 0 5 0    0 1 2 3    0 1 2 3 1 2 3    0 0 0
 vars_parity_diagnostic = 0 1 2 3 0 0 0 0 0
 num_nonzero_asymptotic_vars = 5
 nonzero_asymptotic_vars = chi h11 h22 h33 lapse
@@ -71,7 +71,7 @@ max_spatial_derivative_order = 4
 nan_check = 1
 
 lapse_advec_coeff = 1.0
-lapse_coeff = 2.0
+lapse_coeff = {lapse_coeff}
 lapse_power = 1.0
 shift_advec_coeff = 0.0
 shift_Gamma_coeff = 0.75
@@ -118,6 +118,8 @@ def main():
     ap.add_argument("--rho_thr", type=str, default="0 0 50 300",
                     help="density gate per level in units of rho_far(t_0): level l+1 only where rho > rho_thr[l] rho_far")
     ap.add_argument("--diag_interval", type=int, default=8, help="coarse steps between data_out/lineout outputs")
+    ap.add_argument("--lapse_coeff", type=float, default=0.3,
+                    help="1+log coefficient: d_t alpha = -coeff alpha (K - fref K_far); 2 = standard (freezes the core)")
     ap.add_argument("--boxsize", type=int, default=16)
     ap.add_argument("--stop", type=float, default=0.9, help="stop at t_0 + stop * t_C(0)")
     ap.add_argument("--max_steps", type=int, default=10**7)
@@ -201,12 +203,13 @@ def main():
                            tag_rho=" ".join(f"{float(x) * rho_far:.6e}" for x in (a.rho_thr.split() + ["0"] * 8)[:max(1, a.max_level)]),
                            max_level=a.max_level, regrid="16 " * max(1, a.max_level), regrid_thr=50.0, box=a.boxsize,
                            dtm=dtm, subcyc=subcyc, fixed_dt=fixed_dt, stop=stop, max_steps=a.max_steps, eta=1.0 / MH, ah=a.ah,
-                           ah_int=max(1, plot_int // 4), ah_start=a.ah_start * tC0, ah_guess=0.6 * MH)
+                           ah_int=max(1, plot_int // 4), ah_start=a.ah_start * tC0, ah_guess=0.1 * rm_phys,
+                           lapse_coeff=a.lapse_coeff)
     with open(os.path.join(a.out, "params.txt"), "w") as fh:
         fh.write(params)
     setup = dict(mu=a.mu, f0=a.f0, t0=t0, tC0=tC0, tH=tH, ti=ti, a0=a0, rm=rm, rm_phys=rm_phys, L=L, N=a.N, dx=dx,
                  m=m, mtH=a.mtH, q=q, sigma_ent=sigma, dt=dt, dt_osc=dt_osc, dt_cfl=dt_cfl, dt_multiplier=dtm,
-                 use_subcycling=subcyc, fixed_dt=fixed_dt, dx_finest=dx_fine,
+                 use_subcycling=subcyc, fixed_dt=fixed_dt, dx_finest=dx_fine, lapse_coeff=a.lapse_coeff,
                  n_steps_coarse=int(stop / dt), stop=stop, MH=MH, rho_far=rho_far, t_hor_expected_1D=t_hor_exp,
                  chi_centre=float(chi_t[0]), K_centre=float(K_t[0]), K_far=float(K_t[-1]), K_flrw=-2.0 / t0,
                  rho_centre_over_far=float(0.5 * Pi_t[0] ** 2 / rho_far), ham_rel_max=float(ham_rel[sel].max()),

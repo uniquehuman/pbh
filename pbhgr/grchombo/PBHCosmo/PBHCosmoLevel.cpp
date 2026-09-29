@@ -20,7 +20,7 @@ double PBHGauge::s_K_ref = 0.0;
 #include "GammaCalculator.hpp"
 #include "InitialLTBData.hpp"
 #include "Potential.hpp"
-#include "ScalarField.hpp"
+#include "ScalarFieldRef.hpp"
 #include "SetValue.hpp"
 
 #include "ConstraintsExtraction.hpp"

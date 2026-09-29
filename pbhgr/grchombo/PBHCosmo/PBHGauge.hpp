@@ -29,7 +29,7 @@ class PBHGauge
     {
         rhs.lapse = m_params.lapse_advec_coeff * advec.lapse -
                     m_params.lapse_coeff * pow(vars.lapse, m_params.lapse_power) *
-                        (vars.K - s_K_ref - 2 * vars.Theta);
+                        (vars.K - vars.fref * s_K_ref - 2 * vars.Theta);
         FOR(i)
         {
             rhs.shift[i] = m_params.shift_advec_coeff * advec.shift[i] + m_params.shift_Gamma_coeff * vars.B[i];

@@ -68,6 +68,7 @@ class InitialLTBData
         current_cell.store_vars(1.0, c_lapse);
         current_cell.store_vars(0.0, c_phi);
         current_cell.store_vars(Pi, c_Pi);
+        current_cell.store_vars(K / m_K.back(), c_fref); // gauge reference profile, 1 far away, 0 at turnaround
     }
 
   protected:
