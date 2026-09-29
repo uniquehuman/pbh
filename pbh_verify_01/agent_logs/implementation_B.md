@@ -563,3 +563,67 @@ The v1.1 and v1.2 warning tests now check the codes.
 | Margin study | 4 min |
 | Tests | 3 min |
 | Log | 2 min |
+
+---
+
+# v0.5: contract v1.4 (C14), 2026-09-29, about 02:05–02:15 UTC
+
+**Origin.** Matrix v2 on v0.4 passed 34 of 35 tests. U62 still failed. At i = 1,
+|D⁴M − D⁶M| was 3.5e-9, while its neighbours were about 1e-6 and the true error was 4.5e-7. This
+is an accidental zero of the difference estimate. The C12 nodal term did not help, because
+σ(M) ∝ R is small near the centre.
+
+**Change.** In `RadialOperator.d_err`, σ_trunc(f′)_i = max over j ∈ {i−1, i, i+1} (clipped to the
+grid) of |D⁴f − D⁶f|_j. The nodal term (C12) and the round-off term are unchanged. All derivatives
+go through `d_err`: R′, Γ′, the R″ of the dA path, K_B′, M′ and φ′. So the rule applies
+everywhere, including σ(R′) → σ(Γ), σ(M) and σ(Rθ), and therefore τ±.
+
+## Margins |X|/σ (max over the grid)
+
+Consistent data:
+
+| Data | N | v0.4 ham / mom / hamM | v0.5 ham / mom / hamM |
+|---|---|---|---|
+| generic flux slice | 50 | 0.53 / 1.46 / 0.79 | 0.36 / 1.34 / 0.73 |
+| generic flux slice | 100 | 0.51 / 1.06 / 0.72 | 0.38 / 1.06 / 0.71 |
+| generic flux slice | 200 | 0.51 / 1.03 / 0.71 | 0.40 / 1.01 / 0.70 |
+| scalar + flux + K | 100 | 1.14 / 2.36 / 2.97 | 1.03 / 2.36 / 1.12 |
+| scalar + flux + K | 200 | – | 1.01 / 1.12 / 1.03 |
+
+Deliberate violations, 1e-4 relative ("uniform" = ρ(1 + 1e-4); "centre" = a bump 1e-4·ρ_c at
+r = 0.3 with width 0.1):
+
+| Case | N | v0.4 ham / hamM | v0.5 ham / hamM | v0.5 status |
+|---|---|---|---|---|
+| uniform | 100 | 5.1 / 5.5 | **3.3 / 3.5** | not detected |
+| centre | 100 | 3.6 / 4.4 | **2.2 / 2.4** | not detected |
+| uniform | 200 | 82 / 86 | 53 / 51 | VIOLATED (117 points) |
+| centre | 200 | 60 / 76 | 37 / 41 | VIOLATED (8 points) |
+| uniform | 400 | 1279 / 1308 | 878 / 823 | VIOLATED |
+| centre | 400 | 978 / 1227 | 607 / 681 | VIOLATED |
+
+C14 costs a further factor of about 1.5 in sensitivity. 1e-4 relative violations are detected from
+N = 200 onwards, not at N = 100 (1e-3 is detected at N = 100).
+
+## Side effect
+
+The isotropic Schwarzschild node test (uniform grid, inner edge at r = 0.1 where ψ is steep)
+became UNRESOLVED at the one-sided inner-edge point. That is a legitimate verdict. The test now
+starts at r = 0.2, where the node r = M/2 is index 30. The stretched-grid variant stays at N = 600.
+
+## Tests
+
+107 tests, all passing (about 6 s). The new file is `test_dev_v14.py`:
+
+- **Accidental zero.** sin(r) plus an alternating non-smooth nodal error, with one node inside the
+  D⁶ stencil but outside the D⁴ stencil adjusted so that D⁴f = D⁶f at row i. The raw estimate
+  falls below 0.05 of the true error, v1.3 would give |X|/σ > 20, and v1.4 gives a ratio of
+  true error to σ < 1.5.
+- **Margins.** On consistent data the margin is < 2 at N = 100, 200 and 400. A centre bump is
+  VIOLATED at N = 200 and 400.
+
+**Limitation.** For a purely adversarial nodal error confined to two nodes, the neighbours need not
+cover the true error. A first version of the test found σ/true ≈ 0.19; I replaced it with the
+realistic broad-support case above.
+
+**Time:** about 10 minutes.

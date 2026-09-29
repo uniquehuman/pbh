@@ -134,7 +134,7 @@ class RadialOperator:
         return np.sum(np.abs(W) * fe[idx], axis=1)
 
     def d_err(self, f4, f6, parity, ef=None):
-        """Derivative D4(f4) and error estimate |D4 f4 - D6 f6| + round-off floor.
+        """Derivative D4(f4) and error estimate max_{i-1,i,i+1}|D4 f4 - D6 f6| + round-off floor.
 
         f4, f6 : the field as computed at order 4 / order 6 (identical for input fields)
         ef     : pointwise round-off magnitude of f4 (default: eps*|f4|)
@@ -145,7 +145,13 @@ class RadialOperator:
         if ef is not None:
             mag = mag + np.abs(ef)
         rnd = ROUNDOFF_FACTOR * self.abs_apply(mag, 1, 4)
-        return d4, np.abs(d4 - d6) + rnd
+        # [v1.4 C14] the difference estimate has accidental zeros: take the max over the
+        # neighbours j in {i-1, i, i+1} (within the grid)
+        tr = np.abs(d4 - d6)
+        trm = tr.copy()
+        trm[1:] = np.maximum(trm[1:], tr[:-1])
+        trm[:-1] = np.maximum(trm[:-1], tr[1:])
+        return d4, trm + rnd
 
     def cumint(self, g, parity=1):
         """Cumulative integral int_{r[0]}^{r_i} g dr (array of length N, first entry 0)."""

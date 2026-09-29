@@ -98,7 +98,9 @@ def test_schwarzschild_isotropic_throat(node):
     Mb = 1.0
     # (v0.4: with C12 the steep one-sided inner edge r = 0.1 is UNRESOLVED at N = 300; N = 600
     # resolves it)
-    r = np.linspace(0.1, 5.1, 501) if node else bg.stretched(600, 0.1, 5.0)
+    # (v0.5: with C14 the steep one-sided edge r = 0.1 is UNRESOLVED on the uniform grid; start
+    # at 0.2, node r = M/2 is index 30)
+    r = np.linspace(0.2, 5.2, 501) if node else bg.stretched(600, 0.1, 5.0)
     kw, ex = bg.schwarzschild_iso(r, Mb)
     d = run(kw, "none")
     assert np.max(np.abs(d.M - Mb)) < 1e-2

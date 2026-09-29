@@ -1,7 +1,7 @@
 # sphdiag
 
 Physical diagnostics of spherically symmetric 3+1 slices, implementing
-`physics_contract.md` v1.3 (PBH-VERIFY-01; implementation B v0.4). The package only **measures**: it does not
+`physics_contract.md` v1.4 (PBH-VERIFY-01; implementation B v0.5). The package only **measures**: it does not
 evolve data, solve constraints or impose boundary/regularity conditions.
 
 Needs Python 3.12 and numpy/scipy. Import it with `PYTHONPATH=src`.
@@ -78,7 +78,7 @@ Root signs (`other_sign`, `inner_sign`, `outer_sign`) are `Sign` objects. A `Sig
 ## Numerics
 
 - The derivative stencils use Fornberg weights: 5 points (order 4) for the values and 7 points
-  (order 6) for the error estimate σ(f′) = |D⁴f − D⁶f| + ε·Σ|w_k f_k|; for module-computed
+  (order 6) for the error estimate σ(f′) = max_{i−1,i,i+1}|D⁴f − D⁶f| [v1.4] + ε·Σ|w_k f_k|; for module-computed
   fields (R′ in the dA path, Γ, M) also + Σ|w_k|σ(f_k) [v1.3 C12].
 - At a regular centre the parity ghosts are A, K_A, K_B, φ, Π, Γ even and R, U, M odd.
   Stencils are one-sided at the outer edge and for `center="none"`.
