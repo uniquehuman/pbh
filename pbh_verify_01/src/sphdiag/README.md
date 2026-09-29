@@ -1,7 +1,7 @@
 # sphdiag
 
 Physical diagnostics of spherically symmetric 3+1 slices, implementing
-`physics_contract.md` v1.1 (PBH-VERIFY-01; implementation B v0.2). The package only **measures**: it does not
+`physics_contract.md` v1.2 (PBH-VERIFY-01; implementation B v0.3). The package only **measures**: it does not
 evolve data, solve constraints or impose boundary/regularity conditions.
 
 Needs Python 3.12 and numpy/scipy. Import it with `PYTHONPATH=src`.
@@ -62,6 +62,11 @@ Root signs (`other_sign`, `inner_sign`, `outer_sign`) are `Sign` objects. A `Sig
 - AH candidate: zero of the outgoing expansion θ_out (θ₊ if Γ > 0, θ₋ if Γ < 0), other
   expansion < 0, θ_out < 0 on the smaller-R side and > 0 on the larger-R side; independent of
   the direction of the r label. `outer_ah_candidate` = largest R.
+- [v1.2] Sphere class `UNRESOLVED` when τ₊ > 0.1 or τ₋ > 0.1 (not for `CENTER`). Any such point
+  makes the geometry at best `UNCERTAIN` (`AH_CANDIDATE` / `FUTURE_TRAPPED_NO_AH_CANDIDATE`
+  keep priority); `status['n_unresolved_points']`; warning if they lie inside (in R) an AH
+  candidate. The isolated-`DOUBLY_MARGINAL` exemption needs both neighbours resolved
+  `NORMAL`/`NORMAL_REVERSED`/`CENTER`.
 - R = 0 is allowed only at r[0] with `center="vertex"`.
 - Warnings (`status['warnings']`, plus `center_deviation`, `M_int_mismatch`, `n_M_negative`,
   `n_rel_undefined` keys) never change the data status.

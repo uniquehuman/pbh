@@ -413,3 +413,52 @@ Performance at N = 10⁵: 1.6 s.
 | Code | 23:56–00:00 |
 | Tests and mutation check | 00:00–00:05 |
 | Log | 00:05–00:07 |
+
+---
+
+# v0.3: contract v1.2 (C11, UNRESOLVED sphere class), 2026-09-29, 00:10–00:18 UTC
+
+**Origin.** The coordinator ran v0.2 on a V1 Einstein–Vlasov slice (`results/extension/dump/slice_t11.842.npz`, μ = 0.36, t = 11.84 t_H). Edges 1–5 had τ± ≈ 2–4.9, because 2m/R jumps from 0 to 1.07 across one cell. Edge 1 has Rθ₊ = −0.40 and Rθ₋ = −0.71, so V1 calls it trapped. v0.2 classed these points DOUBLY_MARGINAL, exempted them (no trapped neighbours) and returned PAST_TRAPPED_ONLY. That is a benign status for an unresolved future-trapped core.
+
+**Why v0.2 went wrong.** The v1.1 exemption read "isolated = no trapped neighbours", and I applied it to a *run* of marginal points whose neighbours were each other. Resolution was never checked. v1.2 fixes this in the contract.
+
+## Changes
+
+| Change | Code | Contract |
+|---|---|---|
+| New sphere class `UNRESOLVED`: τ₊ > 0.1 or τ₋ > 0.1 at points that are not CENTER or INVALID. Precedence: INVALID > CENTER > UNRESOLVED > sign table. | `diagnose` (`TAU_MAX`) | C11.1 |
+| Any UNRESOLVED point makes the geometry at best UNCERTAIN. AH_CANDIDATE and FUTURE_TRAPPED_NO_AH_CANDIDATE keep priority. New key `status['n_unresolved_points']`. A warning always lists the R range of the unresolved points, and a second warning fires if they lie inside (in R) an AH candidate. | geometry status, warnings | C11.2 |
+| The DOUBLY_MARGINAL/DEGENERATE exemption now needs both neighbours to exist and be resolved non-marginal, non-trapped (NORMAL, NORMAL_REVERSED or CENTER), and τ± ≤ 0.1 at the point. A marginal point at the grid edge is therefore no longer exempt. | geometry status | C11.3 |
+
+**Interpretation.** The neighbour set for "resolved non-marginal" is {NORMAL, NORMAL_REVERSED, CENTER}. Trapped neighbours are excluded as well, which is consistent with the NO_TRAPPED_SPHERES text and with the existing "DEGENERATE root next to a trapped point" → UNCERTAIN rule.
+
+Root finding is unchanged. Roots are still searched across UNRESOLVED points, since their signs are mostly 0 there and the root's inner and outer signs come from resolved points.
+
+## Results
+
+On V1 slices t = 11.722, 11.842 and 11.963, edges 1–6 are now UNRESOLVED and the geometry is UNCERTAIN (not PAST_TRAPPED_ONLY). The data status is still OK. The constraints are still VIOLATED on these slices, as in the coordinator's run.
+
+## Tests
+
+`tests/dev/test_dev_v12.py` adds 4 tests (101 tests in total, all passing, about 8 s):
+
+- **Synthetic one-cell spike.** U jumps from 0 to −1.2 across the first cell: the point is UNRESOLVED and the geometry UNCERTAIN. The smooth control is NO_TRAPPED_SPHERES.
+- **Spike inside a Schwarzschild PG horizon.** AH_CANDIDATE is kept and the "inside" warning fires.
+- **DOUBLY_MARGINAL exemption.** An interior node is exempt; the same point at the grid edge gives UNCERTAIN.
+- **Regression on the V1 dump** (skipped if the file is missing). Edges 1–5 are UNRESOLVED, the geometry is UNCERTAIN, and there are no DOUBLY_MARGINAL points.
+
+A quick mutation check kills all four mutants of the new rules:
+
+- no UNRESOLVED class;
+- the old isolated rule;
+- no geometry cap;
+- no "inside" warning.
+
+## Time
+
+| Part | Time |
+|---|---|
+| Reading the v1.2 diff and dump | 3 min |
+| Code | 3 min |
+| Tests and mutation check | 3 min |
+| Log | 2 min |
