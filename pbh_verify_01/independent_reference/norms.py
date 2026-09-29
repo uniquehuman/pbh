@@ -43,3 +43,23 @@ def observed_order(e_coarse, e_fine, h_coarse, h_fine):
     if not (e_coarse > 0 and e_fine > 0):
         return float("nan")
     return float(np.log(e_coarse / e_fine) / np.log(h_coarse / h_fine))
+
+
+def cum_cubic4(f, r):
+    """Cumulative integral with the contract-1.1 rule 'cubic through 4 neighbouring nodes' (own code):
+    on [r_i, r_{i+1}] the Lagrange cubic through nodes i-1..i+2 (shifted at the ends) is integrated
+    exactly by 2-point Gauss-Legendre.  Used only for the quadrature tolerance envelope (plan v2)."""
+    n = len(r)
+    out = np.zeros(n)
+    g = np.array([-1.0, 1.0]) / np.sqrt(3.0)
+    for i in range(n - 1):
+        s = min(max(i - 1, 0), n - 4)
+        xs, fs = r[s:s + 4], f[s:s + 4]
+        a, b = r[i], r[i + 1]
+        tot = 0.0
+        for gx in g:
+            x = 0.5 * (a + b) + 0.5 * (b - a) * gx
+            L = [np.prod([(x - xs[m]) / (xs[k] - xs[m]) for m in range(4) if m != k]) for k in range(4)]
+            tot += 0.5 * (b - a) * np.dot(L, fs)
+        out[i + 1] = out[i] + tot
+    return out

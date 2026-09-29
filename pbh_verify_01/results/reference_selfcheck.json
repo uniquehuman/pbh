@@ -111,6 +111,29 @@
    "flux_fraction": 0.18695997478628132,
    "ok": true
   },
+  "v2_background": {
+   "M_rtol_diff": 8.711920074233603e-13,
+   "ham_rel_max": 4.8625432417605366e-12,
+   "mom_rel_max": 1.0781404430159949e-12,
+   "min_Ainv2": 0.7152480341416956,
+   "ok": true,
+   "pure_background_A_minus_1": 2.220446049250313e-16,
+   "pure_background_M_rel_err": 6.531859595373046e-15
+  },
+  "v2_bump": {
+   "M_rtol_diff": 9.992007221626409e-16,
+   "ham_rel_max": 1.6872550402983186e-11,
+   "mom_rel_max": 1.550034244275165e-14,
+   "min_Ainv2": 0.7152480404633753,
+   "ok": true
+  },
+  "v2_kink": {
+   "M_rtol_diff": 1.7050527656436998e-12,
+   "ham_rel_max": 3.3789776438448837e-12,
+   "mom_rel_max": 7.805309510361009e-14,
+   "min_Ainv2": 0.8713928435086739,
+   "ok": true
+  },
   "antisymmetry_Mflux": 1.0873246747422627e-14,
   "ok": true
  },
@@ -468,6 +491,6 @@
   "synthetic_ok": true,
   "ok": true
  },
- "runtime_s": 42.89905142784119,
+ "runtime_s": 68.8087694644928,
  "all_ok": true
 }

@@ -7,3 +7,7 @@ derivation+verification agents launched
 2026-09-28T23:17:45Z implementation B done, tagged impl-B-v0.1
 2026-09-28T23:33:52Z solo A done (106 tests); audit done (seeds S1-S5 all reported)
 2026-09-28T23:49:46Z verification phase 1 done; plan frozen
+2026-09-28T23:53:55Z matrix v1 run: B 28/29 (K40), A 27/29 (M12,K40); contract v1.1 frozen
+2026-09-29T00:05:40Z impl B v0.2 done (97 dev tests); A7/A11 residual
+2026-09-29T00:19:11Z extension mu=0.36/0.10: unresolved-core false-benign status found; contract v1.2
+2026-09-29T00:22:39Z impl B v0.3

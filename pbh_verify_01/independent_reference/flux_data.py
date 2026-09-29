@@ -24,35 +24,83 @@ from .constraints_ref import exact_diag
 
 class FluxData:
     def __init__(self, phi0=0.25, wphi=1.0, Pi0=0.15, wPi=np.sqrt(2.0), kb0=0.4, wkb=2.0, m=1.0,
-                 r_max=8.0, sPi=1.0, sKB=1.0, rtol=1e-13, atol=1e-18):
+                 r_max=8.0, sPi=1.0, sKB=1.0, rtol=1e-13, atol=1e-18, kink=None, bump=None, background=None):
+        """kink = (kk, rk): K_B += kk (r - rk)_+ exp(-(r - rk)^2)  -> K_B' jumps by kk at rk (v2, test U61).
+        The data remain an exact (weak) solution: K_A from the momentum constraint jumps, M is C^1."""
         self.p = dict(phi0=phi0, wphi=wphi, Pi0=sPi * Pi0, wPi=wPi, kb0=sKB * kb0, wkb=wkb, m=m, r_max=r_max)
         self.m = m
         self.r_max = r_max
-        self.sol = solve_ivp(self._rhs, (0.0, r_max * 1.0000001), [0.0, 0.0, 0.0, 0.0], method="DOP853",
-                             rtol=rtol, atol=atol, dense_output=True)
-        assert self.sol.success
+        self.kink = kink
+        self.bump = bump   # (amp, rb, wb): K_B += amp exp(-(r-rb)^2/wb^2) (narrow, smooth; v2 test U62)
+        # background = (phi_b, Pi_b): flat-FLRW scalar background, phi += phi_b, Pi += Pi_b and K_B -= H_b with
+        # H_b = sqrt(8 pi rho_b / 3), rho_b = Pi_b^2/2 + m^2 phi_b^2/2 (exact FLRW instant in areal gauge: A = 1)
+        self.bg = (0.0, 0.0, 0.0)
+        if background is not None:
+            pb, Pb = background
+            rb_ = 0.5 * Pb**2 + 0.5 * m**2 * pb**2
+            self.bg = (pb, Pb, np.sqrt(8 * np.pi * rb_ / 3))
+        ends = [0.0, r_max * 1.0000001] if kink is None else [0.0, kink[1], r_max * 1.0000001]
+        segs, y0 = [], [0.0, 0.0, 0.0, 0.0]
+        mstep = np.inf if bump is None else bump[2] / 4
+        for a, b in zip(ends[:-1], ends[1:]):
+            sol = solve_ivp(self._rhs, (a, b), y0, method="DOP853", rtol=rtol, atol=atol, dense_output=True,
+                            max_step=mstep)
+            assert sol.success
+            segs.append((a, b, sol))
+            y0 = sol.y[:, -1]
+        self._segs = segs
+        import types
+        self.sol = types.SimpleNamespace(sol=self._piece)  # self.sol.sol(r) interface
+
+    def _piece(self, r):
+        """piecewise dense output"""
+        r = np.atleast_1d(np.asarray(r, float))
+        out = np.empty((4, r.size))
+        for k, (a, b, s) in enumerate(self._segs):
+            m = (r >= a) & ((r < b) if k < len(self._segs) - 1 else (r <= b))
+            if m.any():
+                out[:, m] = s.sol(r[m])
+        return out
 
     # prescribed even functions and analytic derivatives
     def phi(self, r, k=0):
         a, w = self.p["phi0"], self.p["wphi"]
         g = a * np.exp(-r**2 / w**2)
         if k == 0:
-            return g
+            return g + self.bg[0]
         if k == 1:
             return -2 * r / w**2 * g
         return (4 * r**2 / w**4 - 2 / w**2) * g
 
     def Pi(self, r):
-        return self.p["Pi0"] * np.exp(-r**2 / self.p["wPi"]**2)
+        return self.p["Pi0"] * np.exp(-r**2 / self.p["wPi"]**2) + self.bg[1]
 
     def KB(self, r, k=0):
         a, w = self.p["kb0"], self.p["wkb"]
         g = a * np.exp(-r**2 / w**2)
         if k == 0:
-            return g
-        if k == 1:
-            return -2 * r / w**2 * g
-        return (4 * r**2 / w**4 - 2 / w**2) * g
+            out = g - self.bg[2]
+        elif k == 1:
+            out = -2 * r / w**2 * g
+        else:
+            out = (4 * r**2 / w**4 - 2 / w**2) * g
+        if self.bump is not None:
+            amp, rb, wb = self.bump
+            x = np.asarray(r, float) - rb
+            e = amp * np.exp(-x**2 / wb**2)
+            out = out + (e if k == 0 else (-2 * x / wb**2 * e if k == 1 else (4 * x**2 / wb**4 - 2 / wb**2) * e))
+        if self.kink is not None:
+            kk, rk = self.kink
+            x = np.asarray(r, float) - rk
+            e = np.exp(-x**2)
+            on = x > 0
+            if k == 0:
+                out = out + kk * np.where(on, x * e, 0.0)
+            elif k == 1:
+                out = out + kk * np.where(on, (1 - 2 * x**2) * e, 0.0)
+            else:
+                out = out + kk * np.where(on, (4 * x**3 - 6 * x) * e, 0.0)
+        return out
 
     def _rhs(self, r, y):
         M = y[0]

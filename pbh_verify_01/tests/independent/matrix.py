@@ -11,7 +11,7 @@ from scipy.optimize import brentq
 
 from common import (EPS, Result, D, has, arr, classes, status, sg, roots_of, build, proj, zero_proj, floor,  # noqa: F401
                     hmin_of, hmax_of, compare, convergence, check_classes, exact_root_tol, check_root, run_case,
-                    fd_ref)
+                    fd_ref, warnings_of, marginal_present)
 from independent_reference import analytic as AN
 from independent_reference.fkg import FKG
 from independent_reference.flux_data import FluxData
@@ -38,6 +38,18 @@ DIAG_FIELDS = ["Gamma", "U", "dR", "M", "sigma_M", "compactness", "M_over_R3", "
 ROOT_KEYS = ["which", "r", "R", "R_lo", "R_hi", "M", "type", "ah_candidate", "other_sign", "inner_sign", "outer_sign"]
 
 # ---------------------------------------------------------------------------- helpers
+
+
+def _rk(ref, key):
+    """v2: 'ham' tolerances use the envelope over admissible Gamma' formulations."""
+    return ref.get("ham_variants", ref[key]) if key == "ham" else ref[key]
+
+
+def _env_err(refq, exact):
+    if isinstance(refq, (list, tuple)):
+        return np.nanmax(np.abs(np.array([np.asarray(q) - exact for q in refq])), axis=0)
+    return np.abs(np.asarray(refq) - exact)
+
 
 
 def _win_max(a, w=3):
@@ -71,9 +83,12 @@ def expected_roots(sl, rmin, rmax, zero_tol=1e-9):
             G = float(sl.exact(rr, with_matter=False)["Gamma"][0])
             inner, outer = -int(np.sign(f1)), int(np.sign(f1))
             typ = "FUTURE_MOTS" if other < 0 else ("PAST_MOTS" if other > 0 else "DEGENERATE")
-            ah = which == "+" and G > 0 and other < 0 and inner < 0 and outer > 0
+            # contract 1.1 section 7: theta_out = theta_+ if Gamma > 0, theta_- if Gamma < 0; the zero must be of
+            # theta_out, other < 0, theta_out < 0 on the smaller-R side: d(R theta_out)/dR > 0 <=> f1 * sign(Gamma) > 0
+            ah = (((which == "+" and G > 0) or (which == "-" and G < 0)) and other < 0 and f1 * np.sign(G) > 0)
+            # inner/outer (by r label) are checked only for Gamma > 0 (their meaning for Gamma < 0: question K25)
             out.append(dict(which=which, r=rs, type=typ, ah=ah, other=other if other != 0 else None,
-                            inner=inner, outer=outer))
+                            inner=inner if G > 0 else None, outer=outer if G > 0 else None))
     return out
 
 
@@ -128,7 +143,7 @@ def sym_family(sd, res, fam, sl, grids, center, fields, pmin=3.5, pmin_edge=2.5,
         ref = fd_ref.pipeline(r, v["A"], v["R"], v["KA"], v["KB"], center, v["rho"], v["jr"])
         g = "%s/N%d" % (fam, len(r))
         for lab, mf, key, Sfn, dd in fields:
-            errs[lab].append(compare(res, "%s/%s" % (g, lab), arr(d, mf), v[key], ref[key], r, v["R"], v["A"],
+            errs[lab].append(compare(res, "%s/%s" % (g, lab), arr(d, mf), v[key], _rk(ref, key), r, v["R"], v["A"],
                                      center, Sfn(v), dd))
         if classes_check:
             dp, dm = class_deltas(r, v, ref)
@@ -192,15 +207,17 @@ def _cumtrap(f, r):
 
 
 def quad_check(res, label, mod, exact_cum, integrand, r, S, extra=0.0, integrand_ref=None):
-    """TOL_Q (plan 1.3, v1.1): 2*max(|E_trap|, |E_simpson|) of the exact integrand on this grid
+    """TOL_Q (plan 1.3, v2): 2*max(|E_trap|, |E_simpson|, |E_cubic4|) of the exact integrand on this grid
     + 10 * integral |integrand_ref - integrand| (FD error of the integrand, own FD) + floor."""
     from scipy.integrate import cumulative_simpson
     mod = np.asarray(mod, float)
     trap = _cumtrap(integrand, r)
     simp = cumulative_simpson(integrand, x=r, initial=0.0)
+    from independent_reference.norms import cum_cubic4
     Etrap = trap + exact_cum[0] - exact_cum
     Esimp = simp + exact_cum[0] - exact_cum
-    tol = 2 * np.maximum(np.abs(Etrap), np.abs(Esimp)) + floor(S, r[-1] - r[0], hmin_of(r), 1) + extra
+    Ecub = cum_cubic4(np.asarray(integrand, float), r) + exact_cum[0] - exact_cum   # v2: contract-1.1 rule
+    tol = 2 * np.maximum(np.maximum(np.abs(Etrap), np.abs(Esimp)), np.abs(Ecub)) + floor(S, r[-1] - r[0], hmin_of(r), 1) + extra
     if integrand_ref is not None:
         tol = tol + 10 * _cumtrap(np.abs(np.asarray(integrand_ref) - integrand), r)
     err = np.abs(mod - exact_cum)
@@ -224,16 +241,20 @@ def t_V00(sd, res):
     for f in DIAG_FIELDS:
         res.check(has(d, f), "Diagnostics lacks field %s" % f)
     st = D(d, "status")
-    for k in ("data", "constraints", "geometry"):
+    for k in ("data", "constraints", "geometry", "warnings", "marginal_present"):   # v2: + warnings, marginal_present
         res.check(k in st if isinstance(st, dict) else hasattr(st, k), "status lacks key %s" % k)
-    nm = D(d, "norms")
-    for name in ("ham", "mom", "hamM"):
-        for reg in ("all", "center", "bulk", "outer"):
-            for kind in ("Linf", "L2vol", "Linf_rel"):
-                try:
-                    nm[name][reg][kind]
-                except Exception:  # noqa: BLE001
-                    res.check(False, "norms[%s][%s][%s] missing" % (name, reg, kind))
+    rv = np.linspace(0, 6, 61)
+    dv, _ = build(sd, rv, AN.minkowski_trivial().exact(rv), "vertex", zero_proj(sd, 61))
+    # v2 (contract 1.1 section 9): region 'center' is called 'inner' when center='none'
+    for dd, regs, lab in ((d, ("all", "inner", "bulk", "outer"), "none"), (dv, ("all", "center", "bulk", "outer"), "vertex")):
+        nm = D(dd, "norms")
+        for name in ("ham", "mom", "hamM"):
+            for reg in regs:
+                for kind in ("Linf", "L2vol", "Linf_rel"):
+                    try:
+                        nm[name][reg][kind]
+                    except Exception:  # noqa: BLE001
+                        res.check(False, "%s: norms[%s][%s][%s] missing" % (lab, name, reg, kind))
     cc = D(d, "center_checks")
     for k in ("Gamma0", "KA_minus_KB0"):
         res.check(k in cc if isinstance(cc, dict) else hasattr(cc, k), "center_checks lacks %s" % k)
@@ -414,12 +435,15 @@ def t_M12(sd, res):
 @case("M13", "Milne chi in [0,12] on coarse grids: sigma band honesty, no false horizon")
 def t_M13(sd, res):
     sl = AN.milne_chi(2.0)
-    for N in (48, 96):
-        r = np.linspace(0, 12, N)
+    # v2: (chi_max, N) = (8, 161), (9, 181) added: far-zone sign unresolved with tau < tau_max = 0.1 (no UNRESOLVED
+    # class), so the contract-1.1 rule "unresolved (+,0) is UNCERTAIN, never PAST_TRAPPED_ONLY" is exercised
+    # without the contract-1.2 UNRESOLVED cap masking it (chi_max = 12 gives tau > 0.1 at large chi)
+    for chi_max, N in ((12, 48), (12, 96), (8, 161), (9, 181)):
+        r = np.linspace(0, chi_max, N)
         v = sl.exact(r)
         d, _ = build(sd, r, v, "vertex", zero_proj(sd, N))
         ref = fd_ref.pipeline(r, v["A"], v["R"], v["KA"], v["KB"], "vertex")
-        g = "N%d" % N
+        g = "chi%d/N%d" % (chi_max, N)
         cl = classes(d)
         # hard: never a resolved wrong sign; module's own band is what counts, so delta = 0 here would be
         # too strict -> use plan 1.6 delta
@@ -430,8 +454,13 @@ def t_M13(sd, res):
         res.check(gs not in ("AH_CANDIDATE", "FUTURE_TRAPPED_NO_AH_CANDIDATE"), "%s: geometry %s on Minkowski" % (g, gs))
         res.metric(g, dict(geometry=gs, n_past_marginal=int(np.sum(cl == "PAST_MARGINAL")),
                            n_past_trapped=int(np.sum(cl == "PAST_TRAPPED")), n_normal=int(np.sum(cl == "NORMAL"))))
-        if gs == "PAST_TRAPPED_ONLY":
-            res.note("%s: PAST_TRAPPED_ONLY issued for a Minkowski slice from unresolved marginal signs (contract question K3c)" % g)
+        # v2 (contract 1.1: unresolved (+,0) is UNCERTAIN, never PAST_TRAPPED_ONLY)
+        res.check(gs != "PAST_TRAPPED_ONLY", "%s: PAST_TRAPPED_ONLY on a Minkowski slice (unresolved far zone)" % g)
+        nm = int(np.sum(np.isin(cl, ["PAST_MARGINAL", "FUTURE_MARGINAL", "UNRESOLVED"])))   # v2: + UNRESOLVED (1.2)
+        if nm:
+            res.check(gs == "UNCERTAIN", "%s: %d unresolved marginal/UNRESOLVED points but geometry %s (expected UNCERTAIN)" % (g, nm, gs))
+        else:
+            res.check(gs == "NO_TRAPPED_SPHERES", "%s: geometry %s, expected NO_TRAPPED_SPHERES" % (g, gs))
 
 
 # ============================================================================ S: Schwarzschild
@@ -480,16 +509,15 @@ def _iso_checks(res, g, r, v, d, ref):
     gs = status(d, "geometry")
     res.check(gs not in ("AH_CANDIDATE", "FUTURE_TRAPPED_NO_AH_CANDIDATE", "PAST_TRAPPED_ONLY", "UNDETERMINED"),
               "%s: geometry %s on the time-symmetric isotropic slice" % (g, gs))
-    if not marg.any():
-        res.check(gs == "NO_TRAPPED_SPHERES", "%s: geometry %s, expected NO_TRAPPED_SPHERES" % (g, gs))
+    mp = marginal_present(d)
+    # v2 (contract 1.1 section 7): isolated DOUBLY_MARGINAL / DEGENERATE throat without trapped neighbours
+    # -> NO_TRAPPED_SPHERES (+ marginal_present = True); UNCERTAIN no longer accepted
+    res.check(gs == "NO_TRAPPED_SPHERES", "%s: geometry %s, expected NO_TRAPPED_SPHERES" % (g, gs))
+    if marg.any():
+        res.check(mp is True or mp is np.True_, "%s: marginal classes present but status.marginal_present = %r" % (g, mp))
     else:
-        st = D(d, "status")
-        mp = st.get("marginal_present") if isinstance(st, dict) else getattr(st, "marginal_present", None)
-        if gs == "NO_TRAPPED_SPHERES":
-            res.check(bool(mp), "%s: marginal classes present but status.marginal_present = %r" % (g, mp))
-        elif gs == "UNCERTAIN":
-            res.note("%s: UNCERTAIN at the throat (literal reading of contract 1.0, question K3a')" % g)
-        res.metric("%s/marginal" % g, dict(n=int(marg.sum()), geometry=gs, marginal_present=mp))
+        res.check(not mp, "%s: no marginal class but status.marginal_present = %r" % (g, mp))
+    res.metric("%s/marginal" % g, dict(n=int(marg.sum()), geometry=gs, marginal_present=mp))
     # classes in the reversed region / exterior are covered by check_classes (sign rule of plan 1.6)
     res.metric("%s/n_reversed" % g, int(np.sum(cl == "NORMAL_REVERSED")))
 
@@ -501,9 +529,11 @@ def t_S22(sd, res):
         grids = [make_grid(kind, N, r0=0.2, r1=10.0, center="none") for N in (201, 401, 801, 1601)]
         sym_family(sd, res, "iso/%s" % kind, sl, grids, "none", F_BASIC + F_RES, matter="zero",
                    edge_fields=("ham", "hamM"), extra_checks=_iso_checks)
-    for k in (8, 16):
-        h = 0.4 / k
-        r = 0.1 + h * np.arange(int(round(9.9 / h)) + 1)
+    for k in (6, 12):
+        # v2: node-on-throat grids start at r0 = 0.2 (v1: 0.1); with h = 0.05 the inner edge r < 0.35 is
+        # under-resolved (R ~ M^2/(4r) steep), which under contract 1.2 correctly caps the status at UNCERTAIN
+        h = 0.3 / k
+        r = 0.2 + h * np.arange(int(round(9.8 / h)) + 1)
         r[k] = 0.5
         for derivs in (False, True):
             v = sl.exact(r)
@@ -669,7 +699,14 @@ def _fkg_slice_checks(sd, res, g, fk, t, N, hard_root=True):
     ham = arr(d, "ham")
     hl = np.maximum(np.r_[np.diff(r), r[-1] - r[-2]], np.r_[r[1] - r[0], np.diff(r)])
     pos = R > 0
-    tol = 1e3 * EPS * (6 * H**2 + 16 * np.pi * rho + 20 / (a * hl[pos] * R[pos]))
+    # v2 round-off model (v1: 1e3 eps (6H^2 + 16 pi rho + 20/(a h R)) missed the nested derivative):
+    # R' = D(R) of the linear R = a r carries eps * sum|w_k R_k| <= eps * S1 * R_w (S1 = 11/h bounds sum|w|
+    # for the one-sided 5-point stencil, R_w = max R over the stencil window); Gamma' = D(Gamma) multiplies
+    # that by S1 again; 4 Gamma'/(A R) -> 4 eps S1^2 (R_w/R)/A^2, and 2(1-Gamma^2)/R^2 -> 4 eps S1 (R_w/R)/(A R^2)*R;
+    # factor 10 for summation.
+    S1 = 11.0 / hl[pos]
+    Rw = (R[pos] + 3 * a * hl[pos]) / R[pos]
+    tol = 1e3 * EPS * (6 * H**2 + 16 * np.pi * rho) + 10 * EPS * (4 * S1**2 * Rw + 4 * S1 * Rw / R[pos]) / a**2
     dev = np.abs(ham[pos] - 6 * s["F_res"])
     res.check(np.all(dev <= tol), "%s ham - 6 F_res: max dev %.2e (tol at max %.2e)" % (g, np.max(dev), tol[np.argmax(dev - tol)]))
     res.check(np.all(np.abs(arr(d, "mom")[pos]) <= floor(abs(H) / L + 4 * np.pi * abs(s["dphi"] * s["phi"]) / L, L, hm, 1)),
@@ -733,6 +770,7 @@ def t_K41(sd, res):
 
 def _flux_family(sd, res, fam, fd, kind, Ns, matter_kind="scalar"):
     errs = {}
+    qerr, qfl = {}, []
     hs = []
     outs = []
     for N in Ns:
@@ -749,7 +787,7 @@ def _flux_family(sd, res, fam, fd, kind, Ns, matter_kind="scalar"):
         g = "%s/N%d" % (fam, N)
         for lab, mf, key, Sfn, dd in F_BASIC + F_RES:
             ex_unc = 10 * np.nanmax(np.abs(v[key])) if lab in ("ham", "mom", "hamM") else 1e-11 * Sfn(v)
-            errs.setdefault(lab, []).append(compare(res, "%s/%s" % (g, lab), arr(d, mf), v[key], ref[key], r, v["R"],
+            errs.setdefault(lab, []).append(compare(res, "%s/%s" % (g, lab), arr(d, mf), v[key], _rk(ref, key), r, v["R"],
                                                     v["A"], "vertex", Sfn(v), dd, extra=ex_unc))
         P = D(d, "projections")
         Sp = np.max(np.abs(v["rho"]) + np.abs(v["jr"]))
@@ -766,6 +804,9 @@ def _flux_family(sd, res, fam, fd, kind, Ns, matter_kind="scalar"):
                    1e-11 * Smass, 4 * np.pi * R**2 * A * rp["rho"])
         e1, t1 = quad_check(res, g + "/M_int-vs-M_MS(ode)", arr(d, "M_int"), v["M"], irho + iflux, r, Smass,
                             1e-11 * Smass + 10 * np.abs(ref["M"][0] - v["M"][0]), irho_r + iflux_r)
+        for q in ("M_rho", "M_flux", "M_prop"):   # v2: contract 1.1 mandates 4th-order quadrature
+            qerr.setdefault(q, []).append(float(np.max(np.abs(arr(d, q) - v[q]))))
+        qfl.append(1e-11 * Smass)
         mf = arr(d, "M_flux")[-1]
         res.check(np.sign(mf) == np.sign(v["M_flux"][-1]) and abs(v["M_flux"][-1]) >= 0.05 * abs(v["M"][-1]),
                   "%s: M_flux(r_max) = %.4e, reference %.4e (sign/size)" % (g, mf, v["M_flux"][-1]))
@@ -778,6 +819,12 @@ def _flux_family(sd, res, fam, fd, kind, Ns, matter_kind="scalar"):
         res.check(status(d, "geometry") == "NO_TRAPPED_SPHERES", "%s geometry %s" % (g, status(d, "geometry")))
         hs.append(hmax_of(r))
         outs.append((r, v, d))
+    for q, e in qerr.items():
+        from independent_reference.norms import observed_order as _oo
+        p = _oo(e[-2], e[-1], hs[-2], hs[-1])
+        res.metrics.setdefault("quadrature_order", {})["%s/%s" % (fam, q)] = dict(p=p, e=e)
+        if e[-1] > 100 * qfl[-1]:
+            res.check(p >= 3.5, "%s/%s cumulative quadrature order %.2f < 3.5 (errors %s)" % (fam, q, p, ["%.1e" % x for x in e]))
     for lab in errs:
         if lab in ("ham", "hamM"):
             convergence(res, "%s/%s" % (fam, lab), hs, errs[lab], 3.5, ("bulk",))
@@ -936,8 +983,8 @@ def t_T70(sd, res):
                                            ("mom", "mom", "mom", np.nanmax(e["mom_absterms"]), 1, fpx),
                                            ("hamM", "hamM", "hamM", np.nanmax(e["hamM_absterms"]), 2, fpx)):
             mr, mx = arr(dr_, mf), arr(dx_, mf) / scale
-            er_ = np.abs(ref_r[key] - e[key])
-            ex_ = np.abs(ref_x[key] / scale - e[key])
+            er_ = _env_err(_rk(ref_r, key), e[key])
+            ex_ = _env_err(_rk(ref_x, key), e[key] * scale) / scale
             tol = 10 * (_win_max(er_) + _win_max(ex_)) + floor(S, 8.0, hmin_of(rn), dd) + floor(S, 1.0, hmin_of(x), dd) * np.maximum(1, 1 / scale) \
                 + 20 * np.nanmax(np.abs(e[key]) if lab in ("ham", "mom", "hamM") else 0)
             ok = np.isfinite(e[key]) & (rn > 0 if lab in ("ham", "mom") else True)
@@ -1150,6 +1197,29 @@ def t_R95(sd, res):
     vh = mod("A", lambda a: (a.__setitem__(slice(40, 43), 1e-200), a)[1])
     attempt("h:overflow", r0, vh, expect_data=("NUMERICAL_FAILURE",))
 
+    # v2 (contract 1.1 section 9: R = 0 anywhere except r[0] with center='vertex' -> INVALID_INPUT)
+    def attempt_geom(label, r, R, center):
+        n = len(r)
+        one, zer = np.ones(n), np.zeros(n)
+        try:
+            d = sd.diagnose(sd.SphericalSlice(r, one, R, zer, zer, center=center), zero_proj(sd, n))
+        except (ValueError, ArithmeticError) as e:
+            res.note("%s: RAISED %s (accepted, K8)" % (label, type(e).__name__))
+            res.metrics.setdefault("outcome", {})[label] = "RAISED " + type(e).__name__
+            return
+        ds, gs = status(d, "data"), status(d, "geometry")
+        res.metrics.setdefault("outcome", {})[label] = dict(data=ds, geometry=gs)
+        res.check(ds == "INVALID_INPUT", "%s: data status %s, expected INVALID_INPUT" % (label, ds))
+        res.check(gs == "UNDETERMINED", "%s: geometry %s, expected UNDETERMINED" % (label, gs))
+    x = np.linspace(-3, 3, 61)
+    x[30] = 0.0
+    attempt_geom("i:R=|x| (interior R=0)", x, np.abs(x), "none")
+    rr = np.linspace(0, 5, 51)
+    attempt_geom("j:R[0]=0 with center=none", rr, rr.copy(), "none")
+    rc = (np.arange(51) + 0.5) * 0.1
+    attempt_geom("k:R[0]=0 with center=cell", rc, rc - rc[0], "cell")
+    attempt_geom("l:vertex, interior R=0", rr, rr * (rr - rr[20])**2, "vertex")
+
 
 # ============================================================================ N: norms
 
@@ -1176,8 +1246,261 @@ def t_N99(sd, res):
             rep = float(nm[name]["all"]["L2vol"])
             which = "unnormalised" if abs(rep - l2n) <= 1e-6 * l2n else ("volume-normalised" if abs(rep - l2u) <= 1e-6 * l2u else "neither")
             res.metrics.setdefault("L2vol_convention", {})["N%d/%s" % (N, name)] = dict(reported=rep, unnorm=l2n, norm=l2u, match=which)
-            if which == "neither":
-                res.note("N%d %s: L2vol matches neither convention (contract question K7)" % (N, name))
+            # v2 (contract 1.1: L2vol = sqrt(int X^2 dV), unnormalised; trapezoid in r).  Tolerance 1e-6 relative:
+            # trapezoid sums of the same array differ only by summation order (~1e-14); 1e-6 admits
+            # any trapezoid bookkeeping variant at the region boundaries of relative weight < 1e-6.
+            res.check(which == "unnormalised", "N%d %s: L2vol %.6e is not the unnormalised proper-volume norm %.6e"
+                      % (N, name, rep, l2n))
+    # v2: center='none' -> region name 'inner' (same definition as 'center')
+    sl = AN.schwarzschild_ks()
+    r = np.linspace(0.5, 12.0, 200)
+    v = sl.exact(r)
+    d, _ = build(sd, r, v, "none", zero_proj(sd, 200))
+    nm = D(d, "norms")
+    reg = regions(200, v["R"], "none")
+    for name in ("ham", "mom", "hamM"):
+        x = arr(d, name)
+        if res.check("inner" in nm[name], "none: norms[%s] lacks region 'inner'" % name):
+            mx = float(np.nanmax(np.abs(x[reg["center"]])))
+            rep = float(nm[name]["inner"]["Linf"])
+            res.check(abs(rep - mx) <= 10 * EPS * mx + 1e-300, "none: norms[%s][inner][Linf] %.6e vs %.6e" % (name, rep, mx))
+
+
+# ============================================================================ v2 additions (contract 1.1)
+
+def _reversed_slice(kind):
+    """Schwarzschild with a DECREASING areal label: coordinate x = -r (x increasing <=> R decreasing),
+    A = |dr/dx| = A(r), R = -x, mixed K unchanged.  Gamma = R'/A = -1/A < 0 everywhere."""
+    import sympy as sp
+    M = sp.Integer(1)
+    Rr = -AN.r
+    if kind == "PG":
+        return AN.SymSlice("PG_reversed", 1, Rr, -sp.sqrt(2 * M / Rr) / (2 * Rr), sp.sqrt(2 * M / Rr) / Rr)
+    A = sp.sqrt(1 + 2 * M / Rr)
+    return AN.SymSlice("KS_reversed", A, Rr, -2 * M * (Rr + M) / (Rr**3 * (1 + 2 * M / Rr)**sp.Rational(3, 2)),
+                       2 * M / (Rr**2 * A))
+
+
+@case("S26", "v2: horizon with a decreasing r label (Gamma < 0): theta_out = theta_-, AH candidate")
+def t_S26(sd, res):
+    for kind in ("PG", "KS"):
+        sl = _reversed_slice(kind)
+        for gk in ("uni", "str"):
+            grids = [make_grid(gk, N, r0=-12.0, r1=-0.5, center="none") for N in (100, 200, 400)]
+
+            def extra(res, g, r, v, d, ref):
+                got = roots_of(d)
+                cands = [q for q in got if q["ah"]]
+                res.check(len(cands) == 1 and cands[0]["which"] == "-",
+                          "%s: expected exactly one AH candidate on theta_- (theta_out for Gamma<0), got %s"
+                          % (g, [(q["which"], q["R"], q["type"], q["ah"]) for q in got]))
+                check_outer_ah(res, g, d, 2.0)
+                geom(res, g, d, "AH_CANDIDATE")
+                res.metric("%s/root_signs" % g, [(q["which"], q["inner"], q["outer"]) for q in got])
+            sym_family(sd, res, "%s_rev/%s" % (kind, gk), sl, grids, "none", F_BASIC, matter=None,
+                       roots_range=(-12.0, -0.5), R_scale=1.0, extra_checks=extra)
+
+
+def _tangent_cfg(delta, noise, seed, N=101, c=0.01):
+    """G27: R = r (+ grid noise), A = 1, K_A = K_B = (1 - delta - c (r-1)^2)/r on r in [0.5, 1.5] ('none').
+    Exact R theta_+ = 2 (delta + c (r-1)^2) (minimum 2 delta at the node r = 1), R theta_- ~ -4."""
+    r = np.linspace(0.5, 1.5, N)
+    r[(N - 1) // 2] = 1.0
+    KB = (1 - delta - c * (r - 1)**2) / r
+    R = r.copy()
+    if noise:
+        R = R + noise * np.random.default_rng(seed).standard_normal(N)
+    return r, R, KB
+
+
+@case("G27", "v2: near-tangent trapped configuration with grid-scale noise in R -> UNCERTAIN (never confident)")
+def t_G27(sd, res):
+    """First principles: min R theta_+ = 2 delta = +-1e-9, while white noise eta = 1e-8 in R makes the
+    finite-difference Gamma = D(R) noisy at eta*||w||_2 ~ 0.95 eta/h ~ 1e-6 (h = 0.01): the sign of
+    R theta_+ for |r - 1| < ~0.03 is not determined by the data.  Honest answer: UNCERTAIN.
+    Noise-free controls (resolved): delta > 0 -> NO_TRAPPED_SPHERES, delta < 0 -> thin trapped shell -> AH_CANDIDATE."""
+    for delta in (5e-10, -5e-10):
+        r, R, KB = _tangent_cfg(delta, 0.0, 0)
+        d = sd.diagnose(sd.SphericalSlice(r, np.ones_like(r), R, KB, KB, center="none"))
+        g = "delta%+.0e/noise-free" % delta
+        geom(res, g, d, "NO_TRAPPED_SPHERES" if delta > 0 else "AH_CANDIDATE")
+        for seed in (1, 2, 3, 4, 5):
+            r, R, KB = _tangent_cfg(delta, 1e-8, seed)
+            d = sd.diagnose(sd.SphericalSlice(r, np.ones_like(r), R, KB, KB, center="none"))
+            g = "delta%+.0e/noise1e-8/seed%d" % (delta, seed)
+            gs = geom(res, g, d, "UNCERTAIN")
+            res.check(not any(q["ah"] for q in roots_of(d)), "%s: confident ah_candidate from noise" % g)
+            res.metrics.setdefault("outcome", {})[g] = dict(geometry=gs, n_marginal=int(np.sum(np.isin(
+                classes(d), ["FUTURE_MARGINAL", "PAST_MARGINAL", "DOUBLY_MARGINAL"]))))
+
+
+def _core_slice(kc, w, H=0.4):
+    """Z81: geometry-only slice, areal R = r, A = 1, K_A = K_B = -H + kc exp(-r^2/w^2): expanding flat-FLRW-like
+    exterior (Hubble sphere at r ~ 1/H) around a compact contracting core.  U = -r K_B, Gamma = 1,
+    R theta_+ = 2(1 + H r - kc r e^{-r^2/w^2}), 2M/R = U^2."""
+    import sympy as sp
+    r_ = AN.r
+    KB = -sp.nsimplify(H) + sp.nsimplify(kc) * sp.exp(-r_**2 / sp.nsimplify(w)**2)
+    return AN.SymSlice("core_kc%g_w%g" % (kc, w), 1, r_, KB, KB)
+
+
+@case("Z81", "v2/1.2: under-resolved compact future-trapped core at the centre inside expanding FLRW -> never benign")
+def t_Z81(sd, res):
+    """First principles.  (a) w = 0.1, kc = 29.2: on the coarse grid h = 0.1 node 1 has 2M/R = U^2 = 1.07
+    (future trapped, U < -1) while node 0 is the centre and node 2 is normal -> the trapped core is one cell wide
+    (the V1-Vlasov motivating case).  (b) w = 0.04, kc = 60: the whole trapped shell (2M/R <= 1.06 near r ~ 0.03)
+    lies between nodes 0 and 1 -> no node samples it.  The exact slice has a future-trapped shell whose outer
+    boundary is an AH candidate, plus a PAST_MOTS at the Hubble sphere.  On coarse grids the honest statuses are
+    AH_CANDIDATE, FUTURE_TRAPPED_NO_AH_CANDIDATE or UNCERTAIN; PAST_TRAPPED_ONLY / NO_TRAPPED_SPHERES would be a
+    benign claim about an unresolved trapped core (FAIL).  Grids on which the core is not sampled at all
+    (max_i |U_i - H r_i| < 0.1, e.g. (b) at N = 41: 0.012) are skipped: the node data are then FLRW to 1e-2 and
+    no grid-local diagnostic can see the core.  Control: the same slices on a fine grid (h = 1e-3 << w)
+    must give AH_CANDIDATE with outer_ah_candidate at the exact outer root."""
+    for lab, kc, w in (("a:one-cell core", 29.2, 0.1), ("b:sub-cell core", 60.0, 0.04)):
+        sl = _core_slice(kc, w)
+        exp = expected_roots(sl, 1e-7, 4.0)
+        cands = [e for e in exp if e["ah"]]
+        res.check(len(cands) == 1, "%s: reference expects one AH candidate, got %s (reference failure -> VOID)" % (lab, exp))
+        R_ah = max(e["r"] for e in cands) if cands else None
+        u = sl.exact(np.linspace(1e-4, 4 * w, 4001), with_matter=False)["U"]
+        res.metric("%s/max_2M_over_R" % lab, float(np.max(u**2)))
+        res.metric("%s/exact_roots" % lab, [(e["which"], e["r"], e["type"], e["ah"]) for e in exp])
+        for N in (41, 81, 161):
+            r = np.linspace(0, 4.0, N)
+            v = sl.exact(r)
+            g = "%s/N%d" % (lab, N)
+            # the core must be SAMPLED: max |U - H r| >= 0.1 at some node; otherwise the node data are
+            # indistinguishable from FLRW and no grid-local diagnostic can see the core (not tested)
+            dev = float(np.max(np.abs(v["U"] - 0.4 * r)))
+            if dev < 0.1:
+                res.metrics.setdefault("not_sampled", {})[g] = dev
+                continue
+            d, _ = build(sd, r, v, "vertex", None)
+            gs = status(d, "geometry")
+            cl = classes(d)
+            res.metrics.setdefault("outcome", {})[g] = dict(geometry=gs, classes_first4=list(cl[:4]),
+                                                            n_unresolved=int(np.sum(cl == "UNRESOLVED")),
+                                                            two_M_over_R_node1=float(v["U"][1]**2))
+            res.check(gs in ("AH_CANDIDATE", "FUTURE_TRAPPED_NO_AH_CANDIDATE", "UNCERTAIN"),
+                      "%s: geometry %s for an unresolved future-trapped core (benign/invalid status)" % (g, gs))
+            if np.any(cl == "UNRESOLVED"):
+                st = D(d, "status")
+                nu = st.get("n_unresolved_points") if isinstance(st, dict) else getattr(st, "n_unresolved_points", None)
+                res.check(nu is not None and nu > 0, "%s: UNRESOLVED classes but status.n_unresolved_points = %r" % (g, nu))
+        r = np.linspace(0, 4.0, 4001)
+        v = sl.exact(r)
+        d, _ = build(sd, r, v, "vertex", None)
+        ref = fd_ref.pipeline(r, v["A"], v["R"], v["KA"], v["KB"], "vertex")
+        g = "%s/fine N4001" % lab
+        dp, dm = class_deltas(r, v, ref)
+        check_classes(res, g, classes(d), v["Rtp"], v["Rtm"], v["R"], "vertex", dp, dm)
+        match_roots(res, g, sl, r, d, v, ref, 1e-7, 4.0, 1.0)
+        check_outer_ah(res, g, d, R_ah)
+        geom(res, g, d, "AH_CANDIDATE")
+
+
+@case("U61", "v2: kinked (weakly consistent) EKG slice must not be CONSISTENT_WITH_TRUNCATION")
+def t_U61(sd, res):
+    """Data: flux data with K_B += kk (r-rk)_+ exp(-(r-rk)^2) (K_B' jumps by kk); exact weak solution from
+    the own constraint-ODE solver.  The contract's sigma = |D4 - D6| does not estimate errors at a kink.
+    Hard: status not CONSISTENT_WITH_TRUNCATION / NOT_EVALUATED.  Expected (physics): UNRESOLVED.
+    Under contract 1.1 section 9 as written, |X|/sigma at a kink is ~12-15 > kappa_c independently of N
+    (both scale with the jump), and VIOLATED has precedence -> VIOLATED is the contract-literal outcome:
+    accepted with a note (question K26)."""
+    for kk, rk in ((1.0, 0.25), (0.3, 4.03)):
+        fk = FluxData(kink=(kk, rk))
+        for N in (100, 200, 400, 800):
+            r = make_grid("uni", N, L=8.0, center="vertex")
+            v = fk.values(r)
+            d, _ = build(sd, r, v, "vertex", sd.ScalarField(v["phi"], v["Pi"], fk.m))
+            g = "kink(%.1f@%.2f)/N%d" % (kk, rk, N)
+            cs = status(d, "constraints")
+            res.metrics.setdefault("status", {})[g] = cs
+            res.check(cs not in ("CONSISTENT_WITH_TRUNCATION", "NOT_EVALUATED"),
+                      "%s: constraints %s on a kinked slice (must not claim consistency)" % (g, cs))
+            if cs == "VIOLATED":
+                res.note("%s: VIOLATED (contract-literal; physically UNRESOLVED expected, question K26)" % g)
+
+
+@case("U62", "v2: under-resolved smooth feature at the centre -> UNRESOLVED (not CONSISTENT); resolved control")
+def t_U62(sd, res):
+    """Data (own constraint-ODE solver): flat-FLRW scalar background (phi_b, Pi_b) = (0.03, 0.02), H_b from
+    Friedmann (so no residual term vanishes anywhere -> the relative resolvedness test is meaningful, cf. K27),
+    plus the X50 perturbation, r in [0, 6], and a narrow central bump K_B += 0.1 exp(-r^2/w_b^2) with
+    w_b/h = 1.33 (N = 100, w_b = 0.08; N = 200, w_b = 0.04) and 1.49 (N = 150, w_b = 0.06): an exact but
+    under-resolved solution.  The feature lies in the 'center' region, where contract 1.1 section 9 makes a single
+    unresolved point sufficient for UNRESOLVED.  Hard: not CONSISTENT_WITH_TRUNCATION / NOT_EVALUATED;
+    expected UNRESOLVED; VIOLATED (false alarm, stencil-dependent for w_b ~ h) accepted with a note.
+    Control: same data without the bump, N = 100..800: not VIOLATED (hard), CONSISTENT expected (note otherwise)."""
+    kw = dict(background=(0.03, 0.02), r_max=6.0)
+    for N, wb in ((100, 0.08), (150, 0.06), (200, 0.04)):
+        f = FluxData(bump=(0.1, 0.0, wb), **kw)
+        r = make_grid("uni", N, L=6.0, center="vertex")
+        v = f.values(r)
+        d, _ = build(sd, r, v, "vertex", sd.ScalarField(v["phi"], v["Pi"], f.m))
+        g = "bump w_b/h=%.2f/N%d" % (wb / (r[1] - r[0]), N)
+        cs = status(d, "constraints")
+        res.metrics.setdefault("status", {})[g] = cs
+        res.check(cs not in ("CONSISTENT_WITH_TRUNCATION", "NOT_EVALUATED"),
+                  "%s: constraints %s on an under-resolved central feature" % (g, cs))
+        if cs == "VIOLATED":
+            res.note("%s: VIOLATED instead of UNRESOLVED (false alarm on exact data; stencil-dependent)" % g)
+    f0 = FluxData(**kw)
+    for N in (100, 200, 400, 800):
+        r = make_grid("uni", N, L=6.0, center="vertex")
+        v = f0.values(r)
+        d, _ = build(sd, r, v, "vertex", sd.ScalarField(v["phi"], v["Pi"], f0.m))
+        cs = status(d, "constraints")
+        res.metrics.setdefault("status", {})["control/N%d" % N] = cs
+        res.check(cs != "VIOLATED", "control N%d: VIOLATED on smooth exact cosmological data" % N)
+        if cs != "CONSISTENT_WITH_TRUNCATION":
+            res.note("control N%d: %s on smooth resolved data (questions K27/K30)" % (N, cs))
+
+
+@case("W85", "v2: status warnings (centre deviation, M_int mismatch, negative mass, undefined rel)")
+def t_W85(sd, res):
+    def has_w(d, keys):
+        w = warnings_of(d)
+        if w is None:
+            return None
+        return any(any(k in x for k in keys) for x in w)
+    CENT, MINT, NEG, REL = ("cent",), ("m_int",), ("neg", "m<0", "m_ms<", "<0"), ("rel",)
+    # centre deviation: irregular K_A(0) - K_B(0) = 0.1 (vertex, cell) vs regular (vertex)
+    for irr, exp in ((0.1, True), (0.0, False)):
+        sl = AN.polynomial_slice(irregular=irr)
+        for center in (("vertex", "cell") if irr else ("vertex",)):
+            r = make_grid("uni", 41, L=3.0, center=center)
+            v = sl.exact(r)
+            d, _ = build(sd, r, v, center, proj(sd, v))
+            hw = has_w(d, CENT)
+            res.check(hw is not None, "status['warnings'] missing")
+            res.check(hw == exp, "irr=%.1f/%s: centre-deviation warning %s, expected %s (warnings %s)"
+                      % (irr, center, hw, exp, warnings_of(d)))
+    # M_int mismatch: rho perturbed by 1e-2 * bump on consistent flux data
+    fd = FluxData()
+    r = make_grid("uni", 400, L=8.0, center="vertex")
+    v = fd.exact(r)
+    b = _bump(r)
+    d, _ = build(sd, r, v, "vertex", sd.Projections(v["rho"] + 1e-2 * b, v["jr"], v["Srr"], v["Sthth"]))
+    res.check(has_w(d, MINT) is True, "rho-perturbed data: no M_int_mismatch warning (warnings %s)" % warnings_of(d))
+    # negative mass: R = r, A = 1 - 0.3 exp(-(r-2)^2) (Gamma > 1), K = 0 -> M_MS = (r/2)(1 - 1/A^2) < 0
+    rn = np.linspace(0.5, 6.0, 200)
+    A = 1 - 0.3 * np.exp(-(rn - 2)**2)
+    Mex = rn / 2 * (1 - 1 / A**2)
+    d, _ = build(sd, rn, dict(A=A, R=rn, KA=0 * rn, KB=0 * rn), "none", zero_proj(sd, 200))
+    res.metric("negative_mass_min_M", float(Mex.min()))
+    res.check(has_w(d, NEG) is True, "M_MS min %.3f < 0 but no negative-mass warning (warnings %s)" % (Mex.min(), warnings_of(d)))
+    # undefined relative residuals: Minkowski with zero matter (all terms vanish)
+    rm = np.linspace(0, 5, 51)
+    d, _ = build(sd, rm, AN.minkowski_trivial().exact(rm), "vertex", zero_proj(sd, 51))
+    res.check(has_w(d, REL) is True, "all residual terms zero but no n_rel_undefined warning (warnings %s)" % warnings_of(d))
+    # controls: FLRW vertex (consistent, smooth, regular centre): no centre / M_int / negative-mass warnings
+    sl = AN.flrw(1.3, 0.4)
+    rf = make_grid("uni", 128, L=3 / 0.4 / 1.3, center="vertex")
+    vf = sl.exact(rf)
+    d, _ = build(sd, rf, vf, "vertex", proj(sd, vf))
+    for keys, lab in ((CENT, "centre"), (MINT, "M_int"), (("neg",), "negative-mass")):
+        res.check(has_w(d, keys) is False, "FLRW control: spurious %s warning (warnings %s)" % (lab, warnings_of(d)))
 
 
 def run_all(ids=None, verbose=True):

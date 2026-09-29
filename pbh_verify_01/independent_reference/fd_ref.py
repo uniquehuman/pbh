@@ -50,6 +50,21 @@ def _extend(r, f, center, parity, ng):
     return np.concatenate([rg, r]), np.concatenate([fg, f]), ng
 
 
+def deriv_absw(f, r, center="vertex", parity=1, order=4):
+    """sum_k |w_k f_k| of the first-derivative stencil (round-off scale; used by the harness mock)."""
+    w = order + 1
+    half = order // 2
+    re, fe, off = _extend(np.asarray(r, float), np.asarray(f, float), center, parity, half)
+    n = len(re)
+    out = np.empty(len(r))
+    for i in range(len(r)):
+        ie = i + off
+        s = min(max(ie - half, 0), n - w)
+        c = fornberg(re[ie], re[s:s + w], 1)[1]
+        out[i] = np.dot(np.abs(c), np.abs(fe[s:s + w]))
+    return out
+
+
 def deriv(f, r, center="vertex", parity=1, order=4):
     """First derivative, stencil width order+1."""
     w = order + 1
@@ -62,6 +77,23 @@ def deriv(f, r, center="vertex", parity=1, order=4):
         s = min(max(ie - half, 0), n - w)
         c = fornberg(re[ie], re[s:s + w], 1)[1]
         out[i] = np.dot(c, fe[s:s + w])
+    return out
+
+
+def deriv2(f, r, center="vertex", parity=1):
+    """4th-order second derivative: 5-point centred where possible, 6-point one-sided at edges
+    (the one-sided stencil needs 6 points for 4th order).  v2: for the formulation envelope only."""
+    re, fe, off = _extend(np.asarray(r, float), np.asarray(f, float), center, parity, 2)
+    n = len(re)
+    out = np.empty(len(r))
+    for i in range(len(r)):
+        ie = i + off
+        if ie - 2 >= 0 and ie + 2 < n:
+            s, w = ie - 2, 5
+        else:
+            w = 6
+            s = min(max(ie - 3, 0), n - w)
+        out[i] = np.dot(fornberg(re[ie], re[s:s + w], 2)[2], fe[s:s + w])
     return out
 
 
@@ -84,6 +116,19 @@ def pipeline(r, A, R, KA, KB, center="vertex", rho=None, jr=None, order=4):
         ham[R == 0] = np.nan
         mom[R == 0] = np.nan
         out.update(ham=ham, mom=mom, hamM=hamM)
+        # v2: admissible 4th-order formulations of Gamma' (contract fixes only the order, not the route):
+        #   DG : Gamma' = D(Gamma)                          (used above)
+        #   D2R: Gamma' = (D2 R * A - D R * D A) / A^2       (second-derivative stencil)
+        #   DDR: Gamma' = D(D R)/A - D R * D A / A^2
+        dA = deriv(A, r, center, 1, order)
+        variants = [ham]
+        for gp in ((deriv2(R, r, center, -1) * A - dR * dA) / A**2,
+                   deriv(dR, r, center, 1, order) / A - dR * dA / A**2):
+            with np.errstate(divide="ignore", invalid="ignore"):
+                h = 2 * (1 - G**2) / R**2 - 4 * gp / (A * R) + 4 * KA * KB + 2 * KB**2 - 16 * np.pi * rho
+            h[R == 0] = np.nan
+            variants.append(h)
+        out["ham_variants"] = variants
     return out
 
 

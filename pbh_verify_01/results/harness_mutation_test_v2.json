@@ -1,0 +1,202 @@
+{
+ "none": {
+  "failed": [],
+  "detected": null,
+  "clean": true,
+  "note": "rerun on final v2 matrix (after M13 extension)"
+ },
+ "F10sign": {
+  "failed": [
+   "M11",
+   "M12",
+   "S20",
+   "S21",
+   "X50",
+   "C60",
+   "D90",
+   "U62"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "jr_sign": {
+  "failed": [
+   "V02",
+   "X50",
+   "X51",
+   "U62"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "jr_noA": {
+  "failed": [
+   "V02",
+   "X52"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "swap_theta": {
+  "failed": [
+   "V03",
+   "V04",
+   "M10",
+   "M11",
+   "M12",
+   "M13",
+   "S20",
+   "S21",
+   "S22",
+   "S23",
+   "S24",
+   "S25",
+   "F30",
+   "F31",
+   "F32",
+   "K40",
+   "K41",
+   "X50",
+   "X52",
+   "T70",
+   "Z80",
+   "D90",
+   "S26",
+   "G27",
+   "Z81"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "ah_nosides": {
+  "failed": [
+   "S25",
+   "F31",
+   "S26",
+   "G27",
+   "Z81"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "nan_ok": {
+  "failed": [
+   "R95"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "naive_mass": {
+  "failed": [
+   "X50",
+   "X51",
+   "X52"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "sigma_zero": {
+  "failed": [
+   "M13",
+   "S22",
+   "X50",
+   "X52",
+   "D90",
+   "U62"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "order2": {
+  "failed": [
+   "V02",
+   "V03",
+   "M11",
+   "M12",
+   "M13",
+   "S20",
+   "S21",
+   "S22",
+   "F30",
+   "F31",
+   "X50",
+   "X51",
+   "X52",
+   "C60",
+   "T70",
+   "Z80",
+   "D90"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "ah_plus_only": {
+  "failed": [
+   "S26"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "past_marg": {
+  "failed": [
+   "M13"
+  ],
+  "detected": true,
+  "clean": null,
+  "note": "rerun after M13 v2 extension; first pass (before extension) failed to detect it"
+ },
+ "no_noise": {
+  "failed": [
+   "G27",
+   "Z81"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "no_unresolved": {
+  "failed": [
+   "U62"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "R0_ok": {
+  "failed": [
+   "R95"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "trap_quad": {
+  "failed": [
+   "X50",
+   "X52",
+   "W85"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "no_warnings": {
+  "failed": [
+   "W85"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "l2_normalised": {
+  "failed": [
+   "N99"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "no_unres_class": {
+  "failed": [
+   "Z81"
+  ],
+  "detected": true,
+  "clean": null
+ },
+ "all_ok": true,
+ "n_cases": 35
+}

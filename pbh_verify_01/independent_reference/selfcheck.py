@@ -77,10 +77,39 @@ def rs4():
                         M_rmax=float(e["M"][-1]), Mflux_rmax=float(e["M_flux"][-1]),
                         flux_fraction=float(e["M_flux"][-1] / e["M"][-1]),
                         ok=dM < 1e-11 and hr < 1e-9 and mr < 1e-12 and Hr < 1e-9 and abs(e["M_flux"][-1] / e["M"][-1]) >= 0.05)
+    # v2 variants: FLRW background (U62), central bump (U62), kink (U61; residuals checked away from the kink)
+    rr = np.linspace(0, 6, 2401)
+    for lab, kw, rmax, mask_fn in (("v2_background", dict(background=(0.03, 0.02), r_max=6.0), 6.0, None),
+                                   ("v2_bump", dict(background=(0.03, 0.02), r_max=6.0, bump=(0.1, 0.0, 0.04)), 6.0, None),
+                                   ("v2_kink", dict(kink=(1.0, 0.25)), 8.0, lambda q: np.abs(q - 0.25) > 2e-3)):
+        q = rr if rmax == 6.0 else r
+        fd = FluxData(**kw)
+        fd2 = FluxData(rtol=1e-11, atol=1e-16, **kw)
+        e = fd.exact(q)
+        m = np.ones(q.size, bool) if mask_fn is None else mask_fn(q)
+
+        def rel2(x, t):
+            t = np.nan_to_num(t)
+            mm = m & (t > 1e-4 * np.max(t))
+            return float(np.nanmax(np.abs(x[mm]) / t[mm]))
+        dM = float(np.max(np.abs(fd2.values(q)["M"] - e["M"])))
+        hr, mr = rel2(e["ham"], e["ham_absterms"]), rel2(e["mom"], e["mom_absterms"])
+        out[lab] = dict(M_rtol_diff=dM, ham_rel_max=hr, mom_rel_max=mr, min_Ainv2=float(np.min(1 / e["A"]**2)),
+                        ok=dM < 1e-10 and hr < 1e-8 and mr < 1e-11)
+        if lab == "v2_background":
+            # exact FLRW limit: with the perturbation removed the data must be A = 1, M = (4 pi/3) rho_b r^3
+            fb = FluxData(phi0=0.0, Pi0=0.0, kb0=0.0, **kw)
+            eb = fb.exact(q)
+            rho_b = 0.5 * 0.02**2 + 0.5 * 0.03**2
+            out[lab]["pure_background_A_minus_1"] = float(np.max(np.abs(eb["A"] - 1)))
+            out[lab]["pure_background_M_rel_err"] = float(np.max(np.abs(eb["M"][1:] - 4 * np.pi / 3 * rho_b * q[1:]**3)
+                                                             / (4 * np.pi / 3 * rho_b * q[1:]**3)))
+            out[lab]["ok"] &= out[lab]["pure_background_A_minus_1"] < 1e-12 and out[lab]["pure_background_M_rel_err"] < 1e-9
     b = FluxData().exact(r)
     f = FluxData(sPi=-1.0).exact(r)
     out["antisymmetry_Mflux"] = float(np.max(np.abs(b["M_flux"] + f["M_flux"])))
-    out["ok"] = all(out[k]["ok"] for k in ("base", "flipPi", "flipKB")) and out["antisymmetry_Mflux"] < 1e-13
+    out["ok"] = all(out[k]["ok"] for k in ("base", "flipPi", "flipKB", "v2_background", "v2_bump", "v2_kink")) \
+        and out["antisymmetry_Mflux"] < 1e-13
     return out
 
 

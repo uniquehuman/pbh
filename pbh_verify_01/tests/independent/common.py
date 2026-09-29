@@ -190,8 +190,11 @@ def zero_proj(sd, n):
 # ------------------------------------------------------------------ tolerances
 
 def floor(S, L, hmin, d):
-    """round-off floor 100 eps S (L/hmin)^d (verification_plan.md 1.3)."""
-    return 100.0 * EPS * float(S) * (float(L) / float(hmin))**d
+    """round-off floor (verification_plan.md 1.3, v2): 100 eps S (L/hmin)^d * c_d, c_0 = c_1 = 1, c_2 = 12.
+    c_2: each nested first derivative multiplies round-off by up to sum|w| h = 10.67 (one-sided
+    5-point stencil); v1 implicitly used ~1 for the second factor (v1: c_2 = 1)."""
+    c = 12.0 if d >= 2 else 1.0
+    return 100.0 * EPS * float(S) * (float(L) / float(hmin))**d * c
 
 
 def hmin_of(r):
@@ -213,9 +216,12 @@ def compare(res, label, mod, exact, ref, r, R, A, center, S, d, regions_req=("ce
     Returns module error norms."""
     mod = np.asarray(mod, float)
     exact = np.asarray(exact, float)
-    ref = np.asarray(ref, float)
     e_mod = mod - exact
-    e_ref = ref - exact
+    if isinstance(ref, (list, tuple)):
+        # v2: envelope over admissible formulations (pointwise max |ref_k - exact|)
+        e_ref = np.nanmax(np.abs(np.array([np.asarray(q, float) - exact for q in ref])), axis=0)
+    else:
+        e_ref = np.asarray(ref, float) - exact
     fl = floor(S, r[-1] - r[0], hmin_of(r), d) + extra
     nm = _norms(e_mod, r, R, A, center)
     nr = _norms(e_ref, r, R, A, center)
@@ -282,6 +288,13 @@ def check_classes(res, label, cls, eRtp, eRtm, R, center, delta_p, delta_m):
     for i, c in enumerate(cls):
         if center == "vertex" and R[i] == 0:
             ok = c == "CENTER"
+        elif c == "UNRESOLVED":
+            # v2 (contract 1.2): admissible only where my own reference error envelope is within a factor 10 of
+            # the UNRESOLVED threshold tau_max = 0.1 (delta = 3*(10 E_ref + floor) >= 0.01); UNRESOLVED on
+            # well-resolved data means sigma is overestimated by > 10x (information hidden)
+            dpi = delta_p[i] if np.ndim(delta_p) else delta_p
+            dmi = delta_m[i] if np.ndim(delta_m) else delta_m
+            ok = max(dpi, dmi) >= 0.01
         elif c not in CLASS_PAIRS:
             ok = False
         else:
@@ -331,3 +344,26 @@ def check_root(res, label, q, R_star, tol, slack, exp):
             res.check(q[k] == exp[k], "%s: root field %s = %r, expected %r" % (label, k, q[k], exp[k]))
     res.metrics.setdefault("roots", {})[label] = dict(R=q["R"], R_exact=R_star, err=abs(q["R"] - R_star), tol=tol,
                                                         R_lo=q["R_lo"], R_hi=q["R_hi"], type=q["type"], ah=q["ah"])
+
+
+def warnings_of(d):
+    """status['warnings'] normalised to a list of lower-case strings (list, dict or str accepted)."""
+    st = D(d, "status")
+    w = st.get("warnings") if isinstance(st, dict) else getattr(st, "warnings", None)
+    if w is None:
+        return None
+    if isinstance(w, dict):
+        return [str(k).lower() + ":" + str(v).lower() for k, v in w.items() if v not in (False, None, 0, "", [])]
+    if isinstance(w, str):
+        return [w.lower()]
+    return [str(x).lower() for x in w]
+
+
+def marginal_present(d):
+    st = D(d, "status")
+    return st.get("marginal_present") if isinstance(st, dict) else getattr(st, "marginal_present", None)
+
+
+def ham_ref(ref):
+    """reference for 'ham' tolerances: the envelope over formulations (v2)."""
+    return ref.get("ham_variants", ref["ham"])
