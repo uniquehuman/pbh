@@ -462,3 +462,104 @@ A quick mutation check kills all four mutants of the new rules:
 | Code | 3 min |
 | Tests and mutation check | 3 min |
 | Log | 2 min |
+
+---
+
+# v0.4: contract v1.3 (C12, C13), 2026-09-29, about 01:45–02:00 UTC
+
+**Origin.** Independent matrix v2 passed 33 of 35 tests on v0.3. Two failed:
+
+- **U62:** a false VIOLATED at the first point next to the centre, with |X|/σ = 95 at N = 100.
+- **W85:** warnings had no codes.
+
+## Changes
+
+**C12 (fixes U62).** For derivatives of fields the module computes itself, σ(f′) now also includes
+Σ_k|w_k^(4)|σ(f_k). This is implemented through the `ef` argument of `RadialOperator.d_err`, so
+the round-off term is kept as before. It applies to:
+
+| Derivative | Nodal error term added |
+|---|---|
+| Γ′ = D(Γ) | σ(Γ) = σ(R′)/A |
+| M′ = D(M) | σ(M) = R\|Γ\|σ(Γ) |
+| R″ in the analytic-`dA` path | σ(R′) |
+
+Input fields (K_B, φ) are unchanged. This is the literal contract formula.
+
+**C13 (fixes W85).** Every warning now starts with a code and a colon:
+
+| Warning | Code |
+|---|---|
+| centre deviation | `CENTER_IRREGULAR:` |
+| M_int mismatch | `M_INT_MISMATCH:` |
+| M < 0 | `NEGATIVE_MASS:` |
+| undefined relative residuals | `REL_UNDEFINED:` |
+| UNRESOLVED spheres | `UNRESOLVED_POINTS:` |
+| unresolved spheres inside an AH candidate | `UNRESOLVED_INSIDE_AH:` |
+| cell ball excluded | `CELL_BALL_EXCLUDED:` |
+| α/β shape, non-finite or ≤ 0 | `ALPHA_BETA:` |
+| vertex r[0] or R[0] snapped to 0 | `OTHER:` |
+
+## Margins |X|/σ (max over the grid)
+
+v0.3 is the old code; v0.4 has the C12 term. Consistent data:
+
+| Data | N | v0.3 ham / mom / hamM | v0.4 ham / mom / hamM |
+|---|---|---|---|
+| generic flux slice (non-areal, vertex, uniform) | 50 | 1.18 / 1.46 / **6.07** | 0.53 / 1.46 / 0.79 |
+| generic flux slice | 100 | 1.11 / 1.06 / 1.10 | 0.51 / 1.06 / 0.72 |
+| generic flux slice | 200 | 1.00 / 1.03 / 1.03 | 0.51 / 1.03 / 0.71 |
+| scalar field + flux + K (areal, r < 6) | 100 | 1.15 / 2.36 / 2.97 | 1.14 / 2.36 / 2.97 |
+
+The scalar-field case is unchanged because R′ is exact in areal gauge.
+
+Deliberate violations, 1e-4 relative. "uniform" is ρ(1 + 1e-4). "centre" is a bump
+1e-4·ρ_c at r = 0.3 with width 0.1:
+
+| Case | N | v0.3 margin (ham / hamM) | v0.4 margin (ham / hamM) | v0.4 status |
+|---|---|---|---|---|
+| uniform | 100 | 62 / 127 | **5.1 / 5.5** | **not detected** (CONSISTENT) |
+| centre | 100 | 10 / 51 | **3.6 / 4.4** | **not detected** |
+| uniform | 200 | 1726 / 6480 | 82 / 86 | VIOLATED |
+| centre | 200 | 182 / 4048 | 60 / 76 | VIOLATED |
+| uniform | 400 | 3.4e4 / 1.2e5 | 1279 / 1308 | VIOLATED |
+| centre | 400 | 2956 / 7.9e4 | 978 / 1227 | VIOLATED |
+
+A violation of 1e-3 relative at N = 100 is still detected.
+
+**Assessment.** The term Σ|w|σ(f_k) scales like σ(f)/h ~ h³, one order lower than the truncation
+error of the derivative (h⁴). In smooth regions it therefore overestimates σ by about 1/h. The
+centre region is not blanketed: the centre bump is detected from N = 200. But the sensitivity to
+1e-4 relative violations is lost at N = 100 (margins 3.6–5.5 < κ_c = 10), where v0.3 detected them.
+
+This is the price of the literal C12 formula. If that is not acceptable, a contract-level
+alternative would be to add the nodal term only where the nodal error is not smooth, e.g. where
+|Δ⁶ σ(f)| is not small compared with σ(f), or near centres and edges. I did not implement that,
+as it goes beyond the contract.
+
+## Other effects
+
+In `test_schwarzschild_isotropic_throat[off-node]` (stretched grid, N = 300, inner edge at
+r = 0.1 where ψ is steep), the one-sided inner-edge point became UNRESOLVED. Because it lies in the
+`inner` region, the global status is UNRESOLVED. At N = 600 or with r₀ = 0.2 it is CONSISTENT, so
+this is a legitimate resolution verdict. The test now uses N = 600.
+
+## Tests
+
+105 tests, all passing (about 4–8 s). The new file is `test_dev_v13.py`:
+
+- σ(M′) ≥ Σ|w|σ(M_k) and σ(Γ′) ≥ Σ|w|σ(Γ_k);
+- the margin on consistent data is < 3 at N = 50, 100 and 200, including the centre;
+- 1e-4 violations (uniform and centre) are detected at N = 200 and 400, and 1e-3 at N = 100;
+- all nine warning codes are produced, and every warning matches `CODE: text`.
+
+The v1.1 and v1.2 warning tests now check the codes.
+
+## Time
+
+| Part | Time |
+|---|---|
+| Code | 4 min |
+| Margin study | 4 min |
+| Tests | 3 min |
+| Log | 2 min |

@@ -1,7 +1,7 @@
 # sphdiag
 
 Physical diagnostics of spherically symmetric 3+1 slices, implementing
-`physics_contract.md` v1.2 (PBH-VERIFY-01; implementation B v0.3). The package only **measures**: it does not
+`physics_contract.md` v1.3 (PBH-VERIFY-01; implementation B v0.4). The package only **measures**: it does not
 evolve data, solve constraints or impose boundary/regularity conditions.
 
 Needs Python 3.12 and numpy/scipy. Import it with `PYTHONPATH=src`.
@@ -68,6 +68,9 @@ Root signs (`other_sign`, `inner_sign`, `outer_sign`) are `Sign` objects. A `Sig
   candidate. The isolated-`DOUBLY_MARGINAL` exemption needs both neighbours resolved
   `NORMAL`/`NORMAL_REVERSED`/`CENTER`.
 - R = 0 is allowed only at r[0] with `center="vertex"`.
+- [v1.3] Every warning starts with a code (`CENTER_IRREGULAR`, `M_INT_MISMATCH`, `NEGATIVE_MASS`,
+  `REL_UNDEFINED`, `UNRESOLVED_POINTS`, `UNRESOLVED_INSIDE_AH`, `CELL_BALL_EXCLUDED`,
+  `ALPHA_BETA`, `OTHER`) followed by ':'.
 - Warnings (`status['warnings']`, plus `center_deviation`, `M_int_mismatch`, `n_M_negative`,
   `n_rel_undefined` keys) never change the data status.
 - Norm regions: `all`, `center` (`inner` when `center="none"`), `bulk`, `outer`.
@@ -75,7 +78,8 @@ Root signs (`other_sign`, `inner_sign`, `outer_sign`) are `Sign` objects. A `Sig
 ## Numerics
 
 - The derivative stencils use Fornberg weights: 5 points (order 4) for the values and 7 points
-  (order 6) for the error estimate σ(f′) = |D⁴f − D⁶f| + ε·Σ|w_k f_k|.
+  (order 6) for the error estimate σ(f′) = |D⁴f − D⁶f| + ε·Σ|w_k f_k|; for module-computed
+  fields (R′ in the dA path, Γ, M) also + Σ|w_k|σ(f_k) [v1.3 C12].
 - At a regular centre the parity ghosts are A, K_A, K_B, φ, Π, Γ even and R, U, M odd.
   Stencils are one-sided at the outer edge and for `center="none"`.
 - Zero band of Rθ±: τ = max(κ(σ(Rθ) + 2σ_noise(U) + 2σ_noise(Γ)), 1e3 ε(|U| + |Γ|)), where

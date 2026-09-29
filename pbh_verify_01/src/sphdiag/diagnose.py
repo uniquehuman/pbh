@@ -438,11 +438,14 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         # ---- Gamma' -------------------------------------------------------------------------
         if slc.dA is not None:
             # Gamma' = (R'' - Gamma A') / A with R'' by FD of R' (even) and analytic A'
-            ddR4, sig_ddR = op.d_err(dR, dR6, +1, ef=ef_dR)
+            # [v1.3 C12] + sum_k |w_k| sigma(R'_k) for the module-computed R'
+            ddR4, sig_ddR = op.d_err(dR, dR6, +1, ef=ef_dR + sig_dR)
             dG = (ddR4 - Gamma * slc.dA) / A
             sig_dG = sig_ddR / A
         else:
-            dG, sig_dG = op.d_err(Gamma, Gamma6, +1, ef=ef_G)
+            # [v1.3 C12] + sum_k |w_k| sigma(Gamma_k): nodal truncation error of Gamma is not
+            # smooth near centres/edges and is invisible to |D4 - D6|
+            dG, sig_dG = op.d_err(Gamma, Gamma6, +1, ef=ef_G + sig_G)
         # ---- K_B' ---------------------------------------------------------------------------
         if slc.dKB is not None:
             dKB = slc.dKB.copy()
@@ -450,7 +453,8 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         else:
             dKB, sig_dKB = op.d_err(KB, KB, +1)
         # ---- M' (numerical derivative of M itself; M is odd at a regular centre) ------------
-        dM, sig_dM = op.d_err(M, M6, -1, ef=ef_M)
+        # [v1.3 C12] + sum_k |w_k| sigma(M_k), sigma(M) = R |Gamma| sigma(Gamma)
+        dM, sig_dM = op.d_err(M, M6, -1, ef=ef_M + sig_M)
 
         # ---- expansions (F12) -----------------------------------------------------------------
         Rth_p = 2.0 * (U + Gamma)
@@ -675,13 +679,13 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         dK0 = abs(cc["KA_minus_KB0"])
         if dG0 > max(kappa_theta * cc["sigma_Gamma0"], 1e-8) or dK0 > 1e-8 * Kmax:
             extra["center_deviation"] = True
-            warnings.append(f"centre deviation: |Gamma(0)-1| = {dG0:.3e}, "
+            warnings.append(f"CENTER_IRREGULAR: centre deviation: |Gamma(0)-1| = {dG0:.3e}, "
                             f"|K_A(0)-K_B(0)| = {dK0:.3e} (regularity not satisfied/resolved)")
     with np.errstate(all="ignore"):
         nM = int(np.sum(M < -(kappa_theta * sig_M + 1e3 * EPS * Mtilde)))
     if nM:
         extra["n_M_negative"] = nM
-        warnings.append(f"M_MS < -kappa sigma_M at {nM} point(s)")
+        warnings.append(f"NEGATIVE_MASS: M_MS < -kappa sigma_M at {nM} point(s)")
     if has_matter and proj is not None:
         with np.errstate(all="ignore"):
             den = np.nanmax(np.abs(M)) + np.nanmax(sig_M)
@@ -689,26 +693,26 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
                 float(np.nanmax(np.abs(M_int - M)))
         extra["M_int_mismatch"] = mism
         if not np.isfinite(mism) or mism > 1e-6:
-            warnings.append(f"M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = "
+            warnings.append(f"M_INT_MISMATCH: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = "
                             f"{mism:.3e}")
         for name, Tabs, ev in (("ham", ham_abs, R != 0.0), ("mom", mom_abs, R != 0.0),
                                ("hamM", hamM_abs, allpts)):
             n = int(np.sum(ev & np.isfinite(Tabs) & (Tabs == 0)))
             extra["n_rel_undefined"][name] = n
         if any(extra["n_rel_undefined"].values()):
-            warnings.append(f"n_rel_undefined: relative residuals undefined (all terms zero) at "
+            warnings.append(f"REL_UNDEFINED: relative residuals undefined (all terms zero) at "
                             f"{extra['n_rel_undefined']} point(s)")
     if unres_pt.any():
         Ru = R[unres_pt]
-        warnings.append(f"{int(unres_pt.sum())} UNRESOLVED sphere(s) (tau > {TAU_MAX}) at "
+        warnings.append(f"UNRESOLVED_POINTS: {int(unres_pt.sum())} UNRESOLVED sphere(s) (tau > {TAU_MAX}) at "
                         f"R in [{Ru.min():.4g}, {Ru.max():.4g}]: geometry at best UNCERTAIN")
         inside = [d for d in ah_roots if np.any(Ru < d["R"])]
         if inside:
-            warnings.append(f"UNRESOLVED sphere(s) lie inside (in R) the AH candidate(s) at R = "
+            warnings.append(f"UNRESOLVED_INSIDE_AH: UNRESOLVED sphere(s) lie inside (in R) the AH candidate(s) at R = "
                             f"{[round(d['R'], 6) for d in inside]}: the trapped interior is "
                             "not resolved")
     if center == "cell" and has_matter:
-        warnings.append("center='cell': M_rho, M_flux, M_prop start at r[0] > 0; the ball "
+        warnings.append("CELL_BALL_EXCLUDED: center='cell': M_rho, M_flux, M_prop start at r[0] > 0; the ball "
                         "[0, r[0]] is not included (M_int starts from M_MS(r[0]))")
 
     # [v1.1 C7] priority NOT_EVALUATED (no matter or data != OK) > VIOLATED > UNRESOLVED > CONSISTENT
