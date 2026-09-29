@@ -36,19 +36,24 @@ class LTBGaussian:
 
     # --- cycloid utilities (scalar or array in eta)
     @staticmethod
-    def _f(e):  # eta - sin eta with series for small eta
-        e = np.asarray(e, dtype=float)
-        return np.where(e < 1e-2, e**3 / 6 - e**5 / 120 + e**7 / 5040, e - np.sin(e))
+    def _f(e):  # eta - sin eta; series (to eta^11) below 0.3 avoids the cancellation of the direct formula
+        e = np.asarray(e, dtype=float); e2 = e * e
+        ser = e**3 / 6 * (1 - e2 / 20 * (1 - e2 / 42 * (1 - e2 / 72 * (1 - e2 / 110))))
+        return np.where(e < 0.3, ser, e - np.sin(e))
 
     @staticmethod
-    def _g(e):  # 1 - cos eta with series
-        e = np.asarray(e, dtype=float)
-        return np.where(e < 1e-2, e**2 / 2 - e**4 / 24 + e**6 / 720, 1 - np.cos(e))
+    def _g(e):  # 1 - cos eta; series (to eta^10) below 0.3
+        e = np.asarray(e, dtype=float); e2 = e * e
+        ser = e2 / 2 * (1 - e2 / 12 * (1 - e2 / 30 * (1 - e2 / 56 * (1 - e2 / 90))))
+        return np.where(e < 0.3, ser, 1 - np.cos(e))
 
     def eta_of_t(self, t, r):
         Tr = self.T(r); x = t / Tr
         if x < 1e-6:
-            e = (6 * x) ** (1 / 3); return e * (1 + e**2 / 60)
+            e = (6 * x) ** (1 / 3); e = e * (1 + e**2 / 60)
+            for _ in range(3):          # Newton refinement on the series (f = eta - sin eta - x, f' = 1 - cos eta)
+                e -= (float(self._f(e)) - x) / max(float(self._g(e)), 1e-300)
+            return e
         return brentq(lambda e: Tr * (e - np.sin(e)) - t, 0.0, 2 * np.pi, xtol=1e-14, rtol=1e-14, maxiter=200)
 
     def R(self, t, r):
