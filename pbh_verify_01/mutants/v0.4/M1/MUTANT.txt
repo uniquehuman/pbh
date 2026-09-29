@@ -1,0 +1,3 @@
+M1: areal vs coordinate radius in M_MS
+diagnose.py: 'M = 0.5 * R * (1.0 - Gamma ** 2 + U ** 2)' -> 'M = 0.5 * r * (1.0 - Gamma ** 2 + U ** 2)'
+diagnose.py: 'M6 = 0.5 * R * (1.0 - Gamma6 ** 2 + U ** 2)' -> 'M6 = 0.5 * r * (1.0 - Gamma6 ** 2 + U ** 2)'

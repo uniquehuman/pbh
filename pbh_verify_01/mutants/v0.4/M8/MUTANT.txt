@@ -1,0 +1,2 @@
+M8: even parity for R at the centre
+diagnose.py: 'dR, sig_dR = op.d_err(R, R, -1)\n            dR6 = op.d(R, -1, 6)' -> 'dR, sig_dR = op.d_err(R, R, +1)\n            dR6 = op.d(R, +1, 6)'
