@@ -1,0 +1,115 @@
+SPHDIAG_PATH = /root/PBH/pbh_verify_01/src  (imported)
+V00  FAIL  API presence (contract section 10)  [9 fails]
+V01  PASS  pi_from_dtphi closed form
+V02  PASS  matter projections (F3-F5, adapter) on polynomial data
+V03  PASS  FD polynomial exactness: M, R theta, Gamma, U, dR, momentum residual at round-off
+V04  PASS  analytic derivatives dA, dR, dKB: exact M, R theta, sigma = 0
+M10  PASS  Minkowski trivial slice (vertex/cell/none)
+M11  PASS  Minkowski height-function slice t=T(r), K_A != K_B, A != 1: M=0, no roots, residual convergence
+M12  PASS  Milne/hyperboloidal slice in chi and areal coordinates
+M13  FAIL  Milne chi in [0,12] on coarse grids: sigma band honesty, no false horizon  [2 fails]
+S20  PASS  Schwarzschild Painleve-Gullstrand (A=1): horizon at R=2M, AH candidate
+S21  PASS  Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild (A!=1, K_A!=K_B)
+S22  FAIL  Schwarzschild isotropic K=0 slice: throat (doubly marginal), reversed region, no false AH  [1 fails]
+S23  PASS  horizon exactly on a grid node: one root, FUTURE_MARGINAL node, AH candidate
+S24  PASS  grid windows entirely inside / outside the horizon: no false edge roots
+S25  PASS  synthetic PBH-in-FLRW snapshot: trapped shells, candidate selection, precedence
+F30  PASS  expanding FLRW dust: M=(4pi/3)rho R^3, Hubble sphere PAST marginal, PAST_TRAPPED beyond
+F31  PASS  contracting FLRW dust: Hubble sphere FUTURE_MOTS bounding the trapped region from inside -> not AH
+F32  PASS  Hubble sphere between the last two nodes: root at the outer edge
+K40  FAIL  homogeneous massive scalar (own FKG ODE): rho, p (instantaneous != 0), ham = 6 F_res, mom = 0  [1 fails]
+K41  PASS  FKG with loose ODE tolerance: module ham reproduces 6*F_res (sign and size)
+X50  PASS  EKG data with radial flux (own constraint-ODE solver): residual convergence, M_MS, M_rho, M_flux
+X51  PASS  flux sign flip (Pi -> -Pi, K_B -> -K_B)
+X52  PASS  Vlasov adapter on the flux data: j_r = A J, residual convergence, M_flux
+C60  PASS  deliberately violated constraints: exact linear response, localisation, VIOLATED, no normalisation
+T70  PASS  radial coordinate transformation: same physical spheres, two coordinates
+Z80  PASS  regular centre: vertex/cell, parity, R=0 limits, M/R^3 extrapolation, center_checks
+D90  PASS  manufactured solution: convergence order of derivatives and sigma bounds the true error
+R95  PASS  robustness: NaN/inf/invalid input and overflow never give NO_TRAPPED_SPHERES
+N99  PASS  reported norms: L_inf per region equals recomputation from the module's own arrays
+------------------------------------------------------------------------------
+V00  FAIL  API presence (contract section 10)
+        FAIL: norms[ham][center][Linf] missing
+        FAIL: norms[ham][center][L2vol] missing
+        FAIL: norms[ham][center][Linf_rel] missing
+        FAIL: norms[mom][center][Linf] missing
+        FAIL: norms[mom][center][L2vol] missing
+        FAIL: norms[mom][center][Linf_rel] missing
+        FAIL: norms[hamM][center][Linf] missing
+        FAIL: norms[hamM][center][L2vol] missing
+        ... 1 more
+V01  PASS  pi_from_dtphi closed form
+V02  PASS  matter projections (F3-F5, adapter) on polynomial data
+V03  PASS  FD polynomial exactness: M, R theta, Gamma, U, dR, momentum residual at round-off
+V04  PASS  analytic derivatives dA, dR, dKB: exact M, R theta, sigma = 0
+M10  PASS  Minkowski trivial slice (vertex/cell/none)
+M11  PASS  Minkowski height-function slice t=T(r), K_A != K_B, A != 1: M=0, no roots, residual convergence
+        order vertex/uni/M                             bulk/Linf      p=-1.53  e=['1.2e-13', '2.5e-13', '5.0e-13', '1.4e-12']
+        order vertex/uni/M                             bulk/L2vol     p=-1.35  e=['1.2e-12', '2.5e-12', '5.3e-12', '1.4e-11']
+        order vertex/uni/M                             center/Linf    p=-2.68  e=['3.0e-16', '6.2e-16', '1.1e-15', '7.1e-15']
+        order vertex/uni/M                             center/L2vol   p=-2.26  e=['6.5e-17', '1.1e-16', '1.7e-16', '8.3e-16']
+M12  PASS  Milne/hyperboloidal slice in chi and areal coordinates
+        order milne_chi/M                              bulk/Linf      p=3.93  e=['4.0e-05', '2.9e-06', '2.0e-07', '1.3e-08']
+        order milne_chi/M                              bulk/L2vol     p=3.91  e=['1.3e-03', '9.8e-05', '6.8e-06', '4.5e-07']
+        order milne_chi/M                              center/Linf    p=4.00  e=['8.7e-09', '5.3e-10', '3.3e-11', '2.0e-12']
+        order milne_chi/M                              center/L2vol   p=4.01  e=['2.4e-09', '1.4e-10', '8.6e-12', '5.3e-13']
+M13  FAIL  Milne chi in [0,12] on coarse grids: sigma band honesty, no false horizon
+        FAIL: N48: 27 points with inadmissible class: i=21 R=213.083 class=UNRESOLVED exact(Rt+,Rt-)=(4.262e+02,-9.386e-03); i=22 R=275.065 class=UNRESOLVED exact(Rt+,Rt-)=(5.501e+02,-7.271e-03); i=23 R=355.076 class=UNRESOLVED exact(Rt+,Rt-)=(7.102e+02,-5.633e-03); i=24 R=458.36 class=UNRESOLVED exact(Rt+,Rt-)=(9.167e+02,-4.363e-03); i=25 R=591.686 class=UNRESOLVED exact(Rt+,Rt-)=(1.183e+03,-3.380e-03)
+        FAIL: N96: 30 points with inadmissible class: i=66 R=4174.88 class=UNRESOLVED exact(Rt+,Rt-)=(8.350e+03,-4.791e-04); i=67 R=4736.99 class=UNRESOLVED exact(Rt+,Rt-)=(9.474e+03,-4.222e-04); i=68 R=5374.78 class=UNRESOLVED exact(Rt+,Rt-)=(1.075e+04,-3.721e-04); i=69 R=6098.45 class=UNRESOLVED exact(Rt+,Rt-)=(1.220e+04,-3.280e-04); i=70 R=6919.54 class=UNRESOLVED exact(Rt+,Rt-)=(1.384e+04,-2.890e-04)
+S20  PASS  Schwarzschild Painleve-Gullstrand (A=1): horizon at R=2M, AH candidate
+        order PG/uni/M                                 bulk/Linf      p=-1.69  e=['2.6e-13', '8.6e-13', '1.3e-12', '4.2e-12']
+        order PG/uni/M                                 bulk/L2vol     p=-1.14  e=['7.4e-12', '2.4e-11', '3.7e-11', '8.2e-11']
+        order PG/uni/M                                 center/Linf    p=-1.05  e=['3.3e-15', '2.0e-15', '1.3e-14', '2.6e-14']
+        order PG/uni/M                                 center/L2vol   p=-0.48  e=['3.1e-15', '2.1e-15', '1.0e-14', '1.4e-14']
+S21  PASS  Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild (A!=1, K_A!=K_B)
+        order KS/uni/M                                 bulk/Linf      p=-1.70  e=['2.1e-13', '7.3e-13', '1.1e-12', '3.6e-12']
+        order KS/uni/M                                 bulk/L2vol     p=-1.14  e=['6.3e-12', '2.1e-11', '3.3e-11', '7.2e-11']
+        order KS/uni/M                                 center/Linf    p=-1.03  e=['6.7e-16', '4.4e-16', '4.3e-15', '8.9e-15']
+        order KS/uni/M                                 center/L2vol   p=-0.58  e=['1.0e-15', '7.8e-16', '4.3e-15', '6.4e-15']
+S22  FAIL  Schwarzschild isotropic K=0 slice: throat (doubly marginal), reversed region, no false AH
+        FAIL: iso/node/h0.05/FD: 3 points with inadmissible class: i=0 R=3.6 class=UNRESOLVED exact(Rt+,Rt-)=(-1.333e+00,1.333e+00); i=1 R=2.81667 class=UNRESOLVED exact(Rt+,Rt-)=(-1.077e+00,1.077e+00); i=2 R=2.45 class=UNRESOLVED exact(Rt+,Rt-)=(-8.571e-01,8.571e-01)
+        note: iso/node/h0.05/FD: UNCERTAIN at the throat (literal reading of contract 1.0, question K3a')
+        order iso/uni/M                                bulk/Linf      p=4.00  e=['6.0e-06', '3.7e-07', '2.3e-08', '1.4e-09']
+        order iso/uni/M                                bulk/L2vol     p=4.00  e=['2.8e-05', '1.7e-06', '1.1e-07', '6.7e-09']
+        order iso/uni/M                                center/Linf    p=3.61  e=['7.2e-03', '1.0e-03', '1.0e-04', '8.4e-06']
+        order iso/uni/M                                center/L2vol   p=4.06  e=['3.5e-02', '3.6e-03', '2.6e-04', '1.6e-05']
+S23  PASS  horizon exactly on a grid node: one root, FUTURE_MARGINAL node, AH candidate
+S24  PASS  grid windows entirely inside / outside the horizon: no false edge roots
+S25  PASS  synthetic PBH-in-FLRW snapshot: trapped shells, candidate selection, precedence
+        order one_shell/M                              bulk/Linf      p=-1.33  e=['3.8e-12', '7.4e-12', '1.9e-11']
+        order one_shell/M                              bulk/L2vol     p=-1.63  e=['4.1e-10', '6.3e-10', '2.0e-09']
+        order one_shell/M                              center/Linf    p=-0.42  e=['1.1e-14', '1.5e-14', '2.0e-14']
+        order one_shell/M                              center/L2vol   p=-0.46  e=['2.1e-14', '2.6e-14', '3.6e-14']
+F30  PASS  expanding FLRW dust: M=(4pi/3)rho R^3, Hubble sphere PAST marginal, PAST_TRAPPED beyond
+F31  PASS  contracting FLRW dust: Hubble sphere FUTURE_MOTS bounding the trapped region from inside -> not AH
+F32  PASS  Hubble sphere between the last two nodes: root at the outer edge
+K40  FAIL  homogeneous massive scalar (own FKG ODE): rho, p (instantaneous != 0), ham = 6 F_res, mom = 0
+        FAIL: N400/t33.927 ham - 6 F_res: max dev 1.47e-13 (tol at max 1.40e-13)
+K41  PASS  FKG with loose ODE tolerance: module ham reproduces 6*F_res (sign and size)
+X50  PASS  EKG data with radial flux (own constraint-ODE solver): residual convergence, M_MS, M_rho, M_flux
+        order flux/uni/M                               bulk/Linf      p=-1.27  e=['3.0e-13', '3.6e-13', '7.3e-13', '1.8e-12']
+        order flux/uni/M                               bulk/L2vol     p=-1.28  e=['4.7e-12', '5.6e-12', '1.0e-11', '2.5e-11']
+        order flux/uni/M                               center/Linf    p=-2.92  e=['4.6e-16', '4.7e-16', '6.5e-16', '5.0e-15']
+        order flux/uni/M                               center/L2vol   p=-2.60  e=['1.3e-16', '1.6e-16', '2.0e-16', '1.2e-15']
+X51  PASS  flux sign flip (Pi -> -Pi, K_B -> -K_B)
+X52  PASS  Vlasov adapter on the flux data: j_r = A J, residual convergence, M_flux
+        order vlasov/M                                 bulk/Linf      p=-1.27  e=['3.6e-13', '7.3e-13', '1.8e-12']
+        order vlasov/M                                 bulk/L2vol     p=-1.28  e=['5.6e-12', '1.0e-11', '2.5e-11']
+        order vlasov/M                                 center/Linf    p=-2.92  e=['4.7e-16', '6.5e-16', '5.0e-15']
+        order vlasov/M                                 center/L2vol   p=-2.60  e=['1.6e-16', '2.0e-16', '1.2e-15']
+C60  PASS  deliberately violated constraints: exact linear response, localisation, VIOLATED, no normalisation
+T70  PASS  radial coordinate transformation: same physical spheres, two coordinates
+Z80  PASS  regular centre: vertex/cell, parity, R=0 limits, M/R^3 extrapolation, center_checks
+D90  PASS  manufactured solution: convergence order of derivatives and sigma bounds the true error
+        order vertex/uni/dR                            bulk/Linf      p=3.98  e=['6.3e-06', '4.4e-07', '2.8e-08', '1.8e-09']
+        order vertex/uni/dR                            bulk/L2vol     p=3.95  e=['1.1e-04', '7.7e-06', '5.1e-07', '3.3e-08']/tmp/claude-0/-root-PBH/a253122d-4efa-4900-a0f6-dec54d4fef98/scratchpad/frozen_v1/tests/independent/run_matrix.py:65: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  out = dict(generated=datetime.datetime.utcnow().isoformat() + "Z", sphdiag_path=SPHDIAG_PATH,
+
+        order vertex/uni/dR                            center/Linf    p=4.00  e=['3.9e-06', '2.4e-07', '1.5e-08', '9.1e-10']
+        order vertex/uni/dR                            center/L2vol   p=3.92  e=['1.7e-06', '6.9e-08', '4.2e-09', '2.8e-10']
+R95  PASS  robustness: NaN/inf/invalid input and overflow never give NO_TRAPPED_SPHERES
+N99  PASS  reported norms: L_inf per region equals recomputation from the module's own arrays
+------------------------------------------------------------------------------
+summary: {'FAIL': 4, 'PASS': 25} (42.9 s)
+written /root/PBH/pbh_verify_01/results/matrix1_B_v0.4.json
