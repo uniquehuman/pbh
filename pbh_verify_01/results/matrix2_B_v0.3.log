@@ -1,0 +1,129 @@
+SPHDIAG_PATH = /root/PBH/pbh_verify_01/src  (imported)
+V00  PASS  API presence (contract section 10)
+V01  PASS  pi_from_dtphi closed form
+V02  PASS  matter projections (F3-F5, adapter) on polynomial data
+V03  PASS  FD polynomial exactness: M, R theta, Gamma, U, dR, momentum residual at round-off
+V04  PASS  analytic derivatives dA, dR, dKB: exact M, R theta, sigma = 0
+M10  PASS  Minkowski trivial slice (vertex/cell/none)
+/tmp/claude-0/-root-PBH/a253122d-4efa-4900-a0f6-dec54d4fef98/scratchpad/frozen_v2/tests/independent/common.py:222: RuntimeWarning: All-NaN slice encountered
+  e_ref = np.nanmax(np.abs(np.array([np.asarray(q, float) - exact for q in ref])), axis=0)
+M11  PASS  Minkowski height-function slice t=T(r), K_A != K_B, A != 1: M=0, no roots, residual convergence
+M12  PASS  Milne/hyperboloidal slice in chi and areal coordinates
+M13  PASS  Milne chi in [0,12] on coarse grids: sigma band honesty, no false horizon
+S20  PASS  Schwarzschild Painleve-Gullstrand (A=1): horizon at R=2M, AH candidate
+S21  PASS  Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild (A!=1, K_A!=K_B)
+S22  PASS  Schwarzschild isotropic K=0 slice: throat (doubly marginal), reversed region, no false AH
+S23  PASS  horizon exactly on a grid node: one root, FUTURE_MARGINAL node, AH candidate
+S24  PASS  grid windows entirely inside / outside the horizon: no false edge roots
+S25  PASS  synthetic PBH-in-FLRW snapshot: trapped shells, candidate selection, precedence
+F30  PASS  expanding FLRW dust: M=(4pi/3)rho R^3, Hubble sphere PAST marginal, PAST_TRAPPED beyond
+F31  PASS  contracting FLRW dust: Hubble sphere FUTURE_MOTS bounding the trapped region from inside -> not AH
+F32  PASS  Hubble sphere between the last two nodes: root at the outer edge
+K40  PASS  homogeneous massive scalar (own FKG ODE): rho, p (instantaneous != 0), ham = 6 F_res, mom = 0
+K41  PASS  FKG with loose ODE tolerance: module ham reproduces 6*F_res (sign and size)
+X50  PASS  EKG data with radial flux (own constraint-ODE solver): residual convergence, M_MS, M_rho, M_flux
+X51  PASS  flux sign flip (Pi -> -Pi, K_B -> -K_B)
+X52  PASS  Vlasov adapter on the flux data: j_r = A J, residual convergence, M_flux
+C60  PASS  deliberately violated constraints: exact linear response, localisation, VIOLATED, no normalisation
+/tmp/claude-0/-root-PBH/a253122d-4efa-4900-a0f6-dec54d4fef98/scratchpad/frozen_v2/tests/independent/matrix.py:50: RuntimeWarning: All-NaN slice encountered
+  return np.nanmax(np.abs(np.array([np.asarray(q) - exact for q in refq])), axis=0)
+T70  PASS  radial coordinate transformation: same physical spheres, two coordinates
+Z80  PASS  regular centre: vertex/cell, parity, R=0 limits, M/R^3 extrapolation, center_checks
+D90  PASS  manufactured solution: convergence order of derivatives and sigma bounds the true error
+R95  PASS  robustness: NaN/inf/invalid input and overflow never give NO_TRAPPED_SPHERES
+N99  PASS  reported norms: L_inf per region equals recomputation from the module's own arrays
+S26  PASS  v2: horizon with a decreasing r label (Gamma < 0): theta_out = theta_-, AH candidate
+G27  PASS  v2: near-tangent trapped configuration with grid-scale noise in R -> UNCERTAIN (never confident)
+Z81  PASS  v2/1.2: under-resolved compact future-trapped core at the centre inside expanding FLRW -> never benign
+U61  PASS  v2: kinked (weakly consistent) EKG slice must not be CONSISTENT_WITH_TRUNCATION
+U62  FAIL  v2: under-resolved smooth feature at the centre -> UNRESOLVED (not CONSISTENT); resolved control  [1 fails]
+W85  FAIL  v2: status warnings (centre deviation, M_int mismatch, negative mass, undefined rel)  [1 fails]
+------------------------------------------------------------------------------
+V00  PASS  API presence (contract section 10)
+V01  PASS  pi_from_dtphi closed form
+V02  PASS  matter projections (F3-F5, adapter) on polynomial data
+V03  PASS  FD polynomial exactness: M, R theta, Gamma, U, dR, momentum residual at round-off
+V04  PASS  analytic derivatives dA, dR, dKB: exact M, R theta, sigma = 0
+M10  PASS  Minkowski trivial slice (vertex/cell/none)
+M11  PASS  Minkowski height-function slice t=T(r), K_A != K_B, A != 1: M=0, no roots, residual convergence
+        order vertex/uni/M                             bulk/Linf      p=-1.53  e=['1.2e-13', '2.5e-13', '5.0e-13', '1.4e-12']
+        order vertex/uni/M                             bulk/L2vol     p=-1.35  e=['1.2e-12', '2.5e-12', '5.3e-12', '1.4e-11']
+        order vertex/uni/M                             center/Linf    p=-2.68  e=['3.0e-16', '6.2e-16', '1.1e-15', '7.1e-15']
+        order vertex/uni/M                             center/L2vol   p=-2.26  e=['6.5e-17', '1.1e-16', '1.7e-16', '8.3e-16']
+M12  PASS  Milne/hyperboloidal slice in chi and areal coordinates
+        order milne_chi/M                              bulk/Linf      p=3.93  e=['4.0e-05', '2.9e-06', '2.0e-07', '1.3e-08']
+        order milne_chi/M                              bulk/L2vol     p=3.91  e=['1.3e-03', '9.8e-05', '6.8e-06', '4.5e-07']
+        order milne_chi/M                              center/Linf    p=4.00  e=['8.7e-09', '5.3e-10', '3.3e-11', '2.0e-12']
+        order milne_chi/M                              center/L2vol   p=4.01  e=['2.4e-09', '1.4e-10', '8.6e-12', '5.3e-13']
+M13  PASS  Milne chi in [0,12] on coarse grids: sigma band honesty, no false horizon
+S20  PASS  Schwarzschild Painleve-Gullstrand (A=1): horizon at R=2M, AH candidate
+        order PG/uni/M                                 bulk/Linf      p=-1.69  e=['2.6e-13', '8.6e-13', '1.3e-12', '4.2e-12']
+        order PG/uni/M                                 bulk/L2vol     p=-1.14  e=['7.4e-12', '2.4e-11', '3.7e-11', '8.2e-11']
+        order PG/uni/M                                 center/Linf    p=-1.05  e=['3.3e-15', '2.0e-15', '1.3e-14', '2.6e-14']
+        order PG/uni/M                                 center/L2vol   p=-0.48  e=['3.1e-15', '2.1e-15', '1.0e-14', '1.4e-14']
+S21  PASS  Schwarzschild ingoing Eddington-Finkelstein / Kerr-Schild (A!=1, K_A!=K_B)
+        order KS/uni/M                                 bulk/Linf      p=-1.70  e=['2.1e-13', '7.3e-13', '1.1e-12', '3.6e-12']
+        order KS/uni/M                                 bulk/L2vol     p=-1.14  e=['6.3e-12', '2.1e-11', '3.3e-11', '7.2e-11']
+        order KS/uni/M                                 center/Linf    p=-1.03  e=['6.7e-16', '4.4e-16', '4.3e-15', '8.9e-15']
+        order KS/uni/M                                 center/L2vol   p=-0.58  e=['1.0e-15', '7.8e-16', '4.3e-15', '6.4e-15']
+S22  PASS  Schwarzschild isotropic K=0 slice: throat (doubly marginal), reversed region, no false AH
+        order iso/uni/M                                bulk/Linf      p=4.00  e=['6.0e-06', '3.7e-07', '2.3e-08', '1.4e-09']
+        order iso/uni/M                                bulk/L2vol     p=4.00  e=['2.8e-05', '1.7e-06', '1.1e-07', '6.7e-09']
+        order iso/uni/M                                center/Linf    p=3.61  e=['7.2e-03', '1.0e-03', '1.0e-04', '8.4e-06']
+        order iso/uni/M                                center/L2vol   p=4.06  e=['3.5e-02', '3.6e-03', '2.6e-04', '1.6e-05']
+S23  PASS  horizon exactly on a grid node: one root, FUTURE_MARGINAL node, AH candidate
+S24  PASS  grid windows entirely inside / outside the horizon: no false edge roots
+S25  PASS  synthetic PBH-in-FLRW snapshot: trapped shells, candidate selection, precedence
+        order one_shell/M                              bulk/Linf      p=-1.33  e=['3.8e-12', '7.4e-12', '1.9e-11']
+        order one_shell/M                              bulk/L2vol     p=-1.63  e=['4.1e-10', '6.3e-10', '2.0e-09']
+        order one_shell/M                              center/Linf    p=-0.42  e=['1.1e-14', '1.5e-14', '2.0e-14']
+        order one_shell/M                              center/L2vol   p=-0.46  e=['2.1e-14', '2.6e-14', '3.6e-14']
+F30  PASS  expanding FLRW dust: M=(4pi/3)rho R^3, Hubble sphere PAST marginal, PAST_TRAPPED beyond
+F31  PASS  contracting FLRW dust: Hubble sphere FUTURE_MOTS bounding the trapped region from inside -> not AH
+F32  PASS  Hubble sphere between the last two nodes: root at the outer edge
+K40  PASS  homogeneous massive scalar (own FKG ODE): rho, p (instantaneous != 0), ham = 6 F_res, mom = 0
+K41  PASS  FKG with loose ODE tolerance: module ham reproduces 6*F_res (sign and size)
+X50  PASS  EKG data with radial flux (own constraint-ODE solver): residual convergence, M_MS, M_rho, M_flux
+        order flux/uni/M                               bulk/Linf      p=-1.27  e=['3.0e-13', '3.6e-13', '7.3e-13', '1.8e-12']
+        order flux/uni/M                               bulk/L2vol     p=-1.28  e=['4.7e-12', '5.6e-12', '1.0e-11', '2.5e-11']
+        order flux/uni/M                               center/Linf    p=-2.92  e=['4.6e-16', '4.7e-16', '6.5e-16', '5.0e-15']
+        order flux/uni/M                               center/L2vol   p=-2.60  e=['1.3e-16', '1.6e-16', '2.0e-16', '1.2e-15']
+X51  PASS  flux sign flip (Pi -> -Pi, K_B -> -K_B)
+X52  PASS  Vlasov adapter on the flux data: j_r = A J, residual convergence, M_flux
+        order vlasov/M                                 bulk/Linf      p=-1.27  e=['3.6e-13', '7.3e-13', '1.8e-12']
+        order vlasov/M                                 bulk/L2vol     p=-1.28  e=['5.6e-12', '1.0e-11', '2.5e-11']
+        order vlasov/M                                 center/Linf    p=-2.92  e=['4.7e-16', '6.5e-16', '5.0e-15']
+        order vlasov/M                                 center/L2vol   p=-2.60  e=['1.6e-16', '2.0e-16', '1.2e-15']
+C60  PASS  deliberately violated constraints: exact linear response, localisation, VIOLATED, no normalisation
+T70  PASS  radial coordinate transformation: same physical spheres, two coordinates
+Z80  PASS  regular centre: vertex/cell, parity, R=0 limits, M/R^3 extrapolation, center_checks
+D90  PASS  manufactured solution: convergence order of derivatives and sigma bounds the true error
+        order vertex/uni/dR                            bulk/Linf      p=3.98  e=['6.3e-06', '4.4e-07', '2.8e-08', '1.8e-09']
+        order vertex/uni/dR                            bulk/L2vol     p=3.95  e=['1.1e-04', '7.7e-06', '5.1e-07', '3.3e-08']
+        order vertex/uni/dR                            center/Linf    p=4.00  e=['3.9e-06', '2.4e-07', '1.5e-08', '9.1e-10']
+        order vertex/uni/dR                            center/L2vol   p=3.92  e=['1.7e-06', '6.9e-08', '4.2e-09', '2.8e-10']
+R95  PASS  robustness: NaN/inf/invalid input and overflow never give NO_TRAPPED_SPHERES
+N99  PASS  reported norms: L_inf per region equals recomputation from the module's own arrays
+S26  PASS  v2: horizon with a decreasing r label (Gamma < 0): theta_out = theta_-, AH candidate
+        order PG_rev/uni/M                             bulk/Linf      p=-0.50  e=['2.2e-13', '8.9e-13', '1.3e-12']
+        order PG_rev/uni/M                             bulk/L2vol     p=-0.38  e=['5.3e-12', '2.5e-11', '3.2e-11']
+        order PG_rev/uni/M                             center/Linf    p=0.80  e=['8.5e-13', '3.0e-12', '1.7e-12']
+        order PG_rev/uni/M                             center/L2vol   p=0.13  e=['9.5e-12', '2.5e-11', '2.3e-11']
+G27  PASS  v2: near-tangent trapped configuration with grid-scale noise in R -> UNCERTAIN (never confident)
+Z81  PASS  v2/1.2: under-resolved compact future-trapped core at the centre inside expanding FLRW -> never benign
+U61  PASS  v2: kinked (weakly consistent) EKG slice must not be CONSISTENT_WITH_TRUNCATION
+        note: kink(1.0@0.25)/N100: VIOLATED (contract-literal; physically UNRESOLVED expected, question K26)
+        note: kink(1.0@0.25)/N200: VIOLATED (contract-literal; physically UNRESOLVED expected, question K26)
+        note: kink(1.0@0.25)/N400: VIOLATED (contract-literal; physically UNRESOLVED expected, question K26)
+U62  FAIL  v2: under-resolved smooth feature at the centre -> UNRESOLVED (not CONSISTENT); resolved control/tmp/claude-0/-root-PBH/a253122d-4efa-4900-a0f6-dec54d4fef98/scratchpad/frozen_v2/tests/independent/run_matrix.py:65: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  out = dict(generated=datetime.datetime.utcnow().isoformat() + "Z", sphdiag_path=SPHDIAG_PATH,
+
+        FAIL: control N100: VIOLATED on smooth exact cosmological data
+        note: bump w_b/h=1.32/N100: VIOLATED instead of UNRESOLVED (false alarm on exact data; stencil-dependent)
+        note: bump w_b/h=1.49/N150: VIOLATED instead of UNRESOLVED (false alarm on exact data; stencil-dependent)
+        note: bump w_b/h=1.33/N200: VIOLATED instead of UNRESOLVED (false alarm on exact data; stencil-dependent)
+W85  FAIL  v2: status warnings (centre deviation, M_int mismatch, negative mass, undefined rel)
+        FAIL: M_MS min -1.078 < 0 but no negative-mass warning (warnings ['m_ms < -kappa sigma_m at 200 point(s)', 'm_int_mismatch: max|m_int - m_ms|/(max|m_ms| + max sigma_m) = 9.846e-01', "n_rel_undefined: relative residuals undefined (all terms zero) at {'ham': 0, 'mom': 200, 'hamm': 0} point(s)"])
+------------------------------------------------------------------------------
+summary: {'PASS': 33, 'FAIL': 2} (68.1 s)
+written /root/PBH/pbh_verify_01/results/matrix2_B_v0.3.json
