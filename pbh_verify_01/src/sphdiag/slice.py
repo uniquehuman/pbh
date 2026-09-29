@@ -147,6 +147,14 @@ class SphericalSlice:
                 else:
                     self.errors.append("center='vertex' requires R[0] = 0 (odd parity of R)")
                     self.bad_points[0] = True
+            # [v1.1 C8] R = 0 is allowed only at r[0] with center='vertex'
+            zeroR = self.R == 0.0
+            if center == "vertex":
+                zeroR[0] = False
+            if zeroR.any():
+                self.errors.append(f"R = 0 at {int(zeroR.sum())} point(s) other than a vertex "
+                                   "centre r[0] (contract v1.1 §9)")
+                self.bad_points |= zeroR
             # alpha / beta: not used by the diagnostics -> warnings only
             if self.alpha is not None:
                 if not np.all(np.isfinite(self.alpha)):

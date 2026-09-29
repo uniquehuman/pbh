@@ -276,3 +276,140 @@ on the first run.
 | Smoke tests on exact backgrounds, fixes 3–4 | 23:06–23:08 (2 min) |
 | Developer tests (7 files) and fixes 1, 2, 5–9 | 23:08–23:16 (8 min) |
 | README, this log | 23:16–23:20 (4 min) |
+
+---
+
+# v0.2: fix round against contract v1.1 and audit findings (2026-09-28/29, 23:54–00:06 UTC)
+
+Base: tag `impl-B-v0.1`. I followed the same role rules: I did not read `tests/independent/`,
+`independent_reference/`, `verification_plan.md`, `arch_A/`, `mutants/` or `audit_copy/`. I read
+the v1.0→v1.1 diff of `physics_contract.md` (§7, §9, §13).
+
+## Changes, each mapped to a finding
+
+| Change | Code | Finding / contract item |
+|---|---|---|
+| **AH candidate via the outgoing expansion.** θ_out = θ₊ if Γ > 0 at the root, θ₋ if Γ < 0. The other expansion must be < 0. θ_out must be < 0 on the smaller-R side and > 0 on the larger-R side. New root keys: `outgoing`, `smallR_sign`, `largeR_sign`. `outer_ah_candidate` is now the root with the largest R (it was the largest r). | `diagnose._find_roots` | A6 → C1 |
+| **UNCERTAIN rule.** Marginal points of every type (now including PAST_MARGINAL) must be explained by a root of known type with resolved sides that differ. The "flanked by trapped points on both sides" exception is dropped. An isolated DOUBLY_MARGINAL/DEGENERATE point without trapped neighbours is exempt (NO_TRAPPED_SPHERES + `marginal_present`). | geometry status | C2 (was my I-1), A10 → C3 |
+| **PAST_TRAPPED_ONLY rule.** Requires PAST_TRAPPED points or a PAST_MOTS root with resolved sides, and no FUTURE_MOTS. An unresolved (+,0) now gives UNCERTAIN. Cases outside the §7 list (e.g. a non-candidate future MOTS without trapped points) also give UNCERTAIN, the conservative fallback. | geometry status | A10 → C3 |
+| **VIOLATED floor.** The threshold is now 1e3·ε·max(Σ\|T\|, S_X). S_X is the magnitude of the terms before cancellation, with stencil sums Σ\|w\|\|f\| for the derivative terms, so the floor never vanishes. σ_round was already in σ(f′) (C = 1). | `_pstatus` | C4 (was my I-3) |
+| **φ′ error for ScalarField.** Already in v0.1 (I-4); unchanged. | `matter.py` | C5 |
+| **σ_noise.** Max over a 7-point window of \|Δ⁶f\|/√924, with parity ghosts at a centre. The zero band is now τ± = max(κ(σ(Rθ) + 2σ_noise(U) + 2σ_noise(Γ)), floor). | `RadialOperator.sigma_noise` | C6 |
+| **UNRESOLVED.** A point is UNRESOLVED if σ(X) > 0.1·Σ\|T\|. The global status is UNRESOLVED if > 5 % of the evaluated points *of one residual* are unresolved, or any point in the `center`/`inner` region. Priority: NOT_EVALUATED (no matter **or data ≠ OK**) > VIOLATED > UNRESOLVED > CONSISTENT. New key: `status['n_unresolved']`. | `_pstatus`, global status | A7, A11 → C7 |
+| **R = 0 validation.** R = 0 anywhere except r[0] with `center="vertex"` gives INVALID_INPUT. | `slice.py` | A9 → C8 |
+| **Warnings (C9).** Keys: `center_deviation`, `M_int_mismatch`, `n_M_negative`, `n_rel_undefined`. There is also a text warning that for `center="cell"` the ball [0, r₀] is excluded from the integrals. None of these changes the data status. | end of `diagnose` | A8, A12, A15 → C9 |
+| **Norm region name.** The first region is called `inner` when `center="none"`. | `_region_names` | A16 → C10 |
+| **K40.** No change. The Γ′ round-off ∝ ε/h² is inherent: a direct R″ stencil has the same ε/h² scaling, so there is no cheap reduction. | – | matrix K40 |
+
+## Interpretations in v0.2 (flagged)
+
+**I-13.** A point is UNRESOLVED only if σ(X) also exceeds the round-off floor 1e3·ε·max(Σ\|T\|,
+S_X). R = 0 points are excluded from the resolution test (all 𝓗_M terms vanish identically there).
+Without these two rules, exact round-off-level cases would be labelled UNRESOLVED:
+
+- flat Minkowski (every 𝓗 term is at round-off level);
+- every vertex grid (at R = 0, σ(M′) ~ h⁴ while Σ\|T\| = \|M′(0)\| ≈ 0).
+
+**I-14 (contract §9 read literally is inconsistent for 𝓗_M in vacuum).** In vacuum Σ_k\|T_k\| of
+𝓗_M is just \|M′\|, which is itself pure truncation error. So σ(M′) > 0.1\|M′\| everywhere, and
+every vacuum slice (Schwarzschild, Minkowski hyperboloid) would be UNRESOLVED. For the resolution
+test only, I replace the M′ term by the magnitude of its un-cancelled pieces:
+
+(\|R′\|/2)(1 + Γ² + U²) + R(\|ΓΓ′\| + \|UU′\|).
+
+𝓗_M itself, its relative value and its floor are unchanged.
+
+**I-15.** The 5 % rule is applied per residual rather than pooled over 𝓗, 𝓜 and 𝓗_M. Pooling
+dilutes a localized defect: on the glued-ball kink (N = 101), 10 of 101 𝓗 points are unresolved
+(10 %), but pooled that is only 3 %.
+
+**I-16.** The centre-deviation warning uses κ = `kappa_theta` (3) for \|Γ(0) − 1\| >
+max(κσ_Γ0, 1e-8). The M < 0 warning uses M < −(κσ_M + 1e3·ε·(R/2)(1 + Γ² + U²)); the round-off
+term avoids warnings on exactly flat data, where σ_M = 0.
+
+## Audit cases re-run on v0.2
+
+| Case | Result |
+|---|---|
+| A6: PG with decreasing R | AH_CANDIDATE (θ₋ root, Γ < 0), R* = 2M in [R_lo, R_hi]. It matches the increasing-label run. |
+| A7: glued balls R = \|x − 1\| | N = 100: VIOLATED. N = 101: UNRESOLVED. **N = 400: CONSISTENT_WITH_TRUNCATION.** |
+| A10: hyperboloid to r/τ = 10⁷ | UNCERTAIN, no longer PAST_TRAPPED_ONLY. |
+| A11: hyperboloid r ∈ [0.5, 1e5], N = 2000 | **Still VIOLATED at r₀.** |
+
+**Open point on A7.** The kink affects about 12 points whatever N is, so their fraction falls below
+5 % as the grid is refined. The v1.1 rule cannot catch a refined non-convergent kink. Only the
+two-grid convergence check (which the contract itself requires) can.
+
+**Open point on A11.** At the one-sided r₀ stencil Γ′ has an O(1) error while |D⁴ − D⁶| underestimates it
+by about 100×. So the point satisfies \|X\| > 10σ, which also means σ < 0.1Σ\|T\|, i.e. "resolved"
+by definition. Under the v1.1 rules a VIOLATED point is always resolved, and VIOLATED has priority.
+This needs a contract-level decision, for example an under-resolution test on the inputs
+(σ_noise(R)/h against R′) that is not part of the contract. I left it as is.
+
+## Tests (v0.2)
+
+There are 97 dev tests, all passing (about 8 s). The new file is `tests/dev/test_dev_v11.py`.
+Tests that kill the A13 survivors:
+
+- M_prop and L2vol with A ≠ 1 (generic slice, quadrature reference);
+- σ_M with Γ ≠ 1 (KS);
+- an unresolved PAST_MARGINAL gives UNCERTAIN;
+- a direct `_find_roots` test of the other-sign check at r_lo/r_hi;
+- cell Γ(0) is extrapolated (Γ[0] − 1 ≈ 1e-4, extrapolated value within 5 %);
+- non-finite integral masses give NUMERICAL_FAILURE;
+- FKG with analytic ρ, S, M = (4π/3)ρR³ and the M/R³ limit.
+
+New physics tests:
+
+- **Horizon with Γ < 0.**
+- **Scalar field with flux and K ≠ 0.** Areal gauge. M comes from an ODE; K_A comes from 𝓜 = 0.
+  Result: CONSISTENT, 𝓗 and 𝓜 converge at order about 4, M_int = M_ref to 1e-6. Flipping the sign
+  of Π gives VIOLATED.
+- **R = 0 away from the centre** gives INVALID_INPUT.
+- **Glued-ball kink** is not CONSISTENT (N = 101).
+- **A coarse centre** gives UNRESOLVED; the same data on a fine grid gives CONSISTENT.
+- **No VIOLATED on flat space in a curvilinear label** (N = 20–1000).
+- **Hyperboloid to 10⁷** is not PAST_TRAPPED_ONLY.
+- **Noise** widens τ.
+- **Every C9 warning** fires, and there are no spurious warnings on clean data.
+
+**Quick mutation check.** I ran my own mutations in scratch copies, not the auditor's mutants. The
+tests kill:
+
+- M_prop without A;
+- L2 without A;
+- σ_M without \|Γ\|;
+- dropping the other-sign end check;
+- cell Γ0 = Γ[0];
+- the orientation rule;
+- noise in τ;
+- the UNRESOLVED rule;
+- σ(ρ) = 0 for ScalarField;
+- the R = 0 check;
+- removing all four mass-finiteness checks (removing only M_int and M_prop survived; the test now
+  checks all three failure names).
+
+"PAST_MARGINAL in the PAST_TRAPPED_ONLY condition" survives, but in v0.2 it is an *equivalent*
+mutant. An unexplained PAST_MARGINAL is caught earlier by UNCERTAIN, and an explained one implies
+a resolved PAST_MOTS root.
+
+Performance at N = 10⁵: 1.6 s.
+
+## My own errors in v0.2
+
+1. **Literal UNRESOLVED gave false results.** The first implementation of UNRESOLVED followed §9
+   literally and made the isotropic Schwarzschild slice and the Minkowski hyperboloid UNRESOLVED
+   (𝓗_M in vacuum; see I-14). Detected by the existing background tests. Fixed with I-13 and I-14.
+2. **5 % rule first pooled.** I first pooled the 5 % over all residuals, so glued balls
+   stayed CONSISTENT at N = 101. Changed to per residual (I-15).
+3. **Two new tests wrong.** The cell-Γ0 test used too coarse a grid (FD error ~1e-4 hid the
+   extrapolation), and a test expected φ′ of a constant to be exactly 0. Both were test errors.
+
+## Time
+
+| Part | Time |
+|---|---|
+| Reading the v1.1 diff | 23:54–23:56 |
+| Code | 23:56–00:00 |
+| Tests and mutation check | 00:00–00:05 |
+| Log | 00:05–00:07 |
