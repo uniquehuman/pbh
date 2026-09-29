@@ -25,6 +25,8 @@ PAST_MARGINAL = "PAST_MARGINAL"
 DOUBLY_MARGINAL = "DOUBLY_MARGINAL"
 CENTER = "CENTER"
 INVALID = "INVALID"
+UNRESOLVED = "UNRESOLVED"
+TAU_MAX = 0.1          # [v1.2 C11] sign of R theta not resolved if tau > TAU_MAX (scale of R theta: 2)
 CLASS_DTYPE = "<U16"
 
 _CLASS_TABLE = {
@@ -179,7 +181,7 @@ def _structural_failure(N, errors, warnings, center):
     status = {
         "data": "INVALID_INPUT", "constraints": "NOT_EVALUATED", "geometry": "UNDETERMINED",
         "marginal_present": False, "errors": list(errors), "warnings": list(warnings),
-        "numerical_failures": [], "n_invalid_points": N,
+        "numerical_failures": [], "n_invalid_points": N, "n_unresolved_points": 0,
     }
     fields = {k: nan.copy() for k in (
         "Gamma", "U", "dR", "M", "sigma_M", "compactness", "M_over_R3",
@@ -617,6 +619,9 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
     lut = np.array([_CLASS_TABLE[(a, b)] for a in (-1, 0, 1) for b in (-1, 0, 1)],
                    dtype=CLASS_DTYPE)
     cls = lut[(s_p + 1) * 3 + (s_m + 1)]
+    # [v1.2 C11] unresolved sign: tau_+ or tau_- > TAU_MAX (not for CENTER / INVALID points)
+    unres_pt = ((tau_p > TAU_MAX) | (tau_m > TAU_MAX)) & ~(R == 0.0) & ~invalid_pt
+    cls[unres_pt] = UNRESOLVED
     cls[(R == 0.0) & ~invalid_pt] = CENTER
     cls[invalid_pt] = INVALID
     s_p = np.where(invalid_pt, 0, s_p)
@@ -693,6 +698,15 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         if any(extra["n_rel_undefined"].values()):
             warnings.append(f"n_rel_undefined: relative residuals undefined (all terms zero) at "
                             f"{extra['n_rel_undefined']} point(s)")
+    if unres_pt.any():
+        Ru = R[unres_pt]
+        warnings.append(f"{int(unres_pt.sum())} UNRESOLVED sphere(s) (tau > {TAU_MAX}) at "
+                        f"R in [{Ru.min():.4g}, {Ru.max():.4g}]: geometry at best UNCERTAIN")
+        inside = [d for d in ah_roots if np.any(Ru < d["R"])]
+        if inside:
+            warnings.append(f"UNRESOLVED sphere(s) lie inside (in R) the AH candidate(s) at R = "
+                            f"{[round(d['R'], 6) for d in inside]}: the trapped interior is "
+                            "not resolved")
     if center == "cell" and has_matter:
         warnings.append("center='cell': M_rho, M_flux, M_prop start at r[0] > 0; the ball "
                         "[0, r[0]] is not included (M_int starts from M_MS(r[0]))")
@@ -735,12 +749,16 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
     for i in np.flatnonzero(np.isin(cls, (FUTURE_MARGINAL, PAST_MARGINAL, DOUBLY_MARGINAL))):
         rel = [d for d in point_roots.get(int(i), [])
                if (d["which"] == "+" and s_p[i] == 0) or (d["which"] == "-" and s_m[i] == 0)]
-        left = i - 1 >= 0 and trapped[i - 1]
-        right = i + 1 < N and trapped[i + 1]
         if any(_resolved(d) for d in rel):
             continue
-        if not (left or right) and (cls[i] == DOUBLY_MARGINAL
-                                    or (rel and all(d["type"] == DEGENERATE for d in rel))):
+        # [v1.2 C11] isolated = both neighbours exist and are resolved, non-marginal,
+        # non-trapped (NORMAL / NORMAL_REVERSED / CENTER); tau_pm <= TAU_MAX holds here because
+        # otherwise the point itself would be UNRESOLVED
+        isolated = (0 < i < N - 1 and cls[i - 1] in (NORMAL, NORMAL_REVERSED, CENTER)
+                    and cls[i + 1] in (NORMAL, NORMAL_REVERSED, CENTER)
+                    and tau_p[i] <= TAU_MAX and tau_m[i] <= TAU_MAX)
+        if isolated and (cls[i] == DOUBLY_MARGINAL
+                         or (rel and all(d["type"] == DEGENERATE for d in rel))):
             exempt[i] = True
             continue
         uncertain = True
@@ -763,7 +781,8 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         geometry = "AH_CANDIDATE"
     elif (cls == FUTURE_TRAPPED).any():
         geometry = "FUTURE_TRAPPED_NO_AH_CANDIDATE"
-    elif uncertain:
+    elif uncertain or unres_pt.any():
+        # [v1.2 C11] any UNRESOLVED point: geometry at best UNCERTAIN
         geometry = "UNCERTAIN"
     else:
         past = ((cls == PAST_TRAPPED).any()
@@ -786,6 +805,7 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         "numerical_failures": failures, "n_invalid_points": int(invalid_pt.sum()),
         "uncertain_points": unexplained, "degenerate_root_near_trapped": degenerate_near_trapped,
         **extra,
+        "n_unresolved_points": int(unres_pt.sum()),
         "n_unresolved": {"ham": int((ham_status == "UNRESOLVED").sum()),
                          "mom": int((mom_status == "UNRESOLVED").sum()),
                          "hamM": int((hamM_status == "UNRESOLVED").sum())},
