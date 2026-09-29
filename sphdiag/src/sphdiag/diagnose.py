@@ -160,8 +160,15 @@ def _nan(N):
     return np.full(N, np.nan)
 
 
-def _empty_norms():
-    return {nm: {rg: {k: np.nan for k in NORM_KINDS} for rg in NORM_REGIONS} for nm in NORM_NAMES}
+def _region_names(center):
+    """[v1.1 C10] the inner-edge region is called 'inner' when there is no centre."""
+    first = "inner" if center == "none" else "center"
+    return ("all", first, "bulk", "outer")
+
+
+def _empty_norms(center=None):
+    return {nm: {rg: {k: np.nan for k in NORM_KINDS} for rg in _region_names(center)}
+            for nm in NORM_NAMES}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -186,7 +193,7 @@ def _structural_failure(N, errors, warnings, center):
         M_over_R3_extrapolated_mask=np.zeros(N, dtype=bool),
         sphere_class=np.full(N, INVALID, dtype=CLASS_DTYPE),
         sign_plus=np.zeros(N, dtype=int), sign_minus=np.zeros(N, dtype=int),
-        roots=[], outer_ah_candidate=None, projections=None, norms=_empty_norms(),
+        roots=[], outer_ah_candidate=None, projections=None, norms=_empty_norms(center),
         center_checks={"center": center, "Gamma0": np.nan, "KA_minus_KB0": np.nan,
                        "Gamma0_minus_1": np.nan, "sigma_Gamma0": np.nan, "R0": np.nan,
                        "M_over_R3_0": np.nan, "extrapolated": False},
@@ -315,14 +322,23 @@ def _find_roots(which, r, R, M, Gamma, v, tau, s, vo, tauo, usable):
                 if not np.isfinite(ve) or ve * other < 0:
                     other = 0
         rtype = FUTURE_MOTS if other < 0 else (PAST_MOTS if other > 0 else DEGENERATE)
-        ah = bool(which == "+" and rtype == FUTURE_MOTS and G_star > 0
-                  and inner == -1 and outer == 1)
+        # [v1.1 C1] orientation-invariant criterion: the zero must be of the OUTGOING expansion
+        # theta_out (towards growing R): theta_+ if Gamma > 0, theta_- if Gamma < 0 at the root;
+        # theta_out < 0 on the smaller-R side and > 0 on the larger-R side.
+        if G_star > 0:
+            smallR, largeR, is_out = inner, outer, which == "+"
+        elif G_star < 0:
+            smallR, largeR, is_out = outer, inner, which == "-"
+        else:
+            smallR, largeR, is_out = 0, 0, False
+        ah = bool(is_out and rtype == FUTURE_MOTS and smallR == -1 and largeR == 1)
         roots.append({
             "which": which, "r": r_star, "R": R_star, "R_lo": R_lo, "R_hi": R_hi,
             "M": M_star, "type": rtype, "ah_candidate": ah,
             "other_sign": Sign(other), "inner_sign": Sign(inner), "outer_sign": Sign(outer),
             "r_lo": r_lo, "r_hi": r_hi, "Gamma": G_star, "n_crossings": len(evs),
             "tangential": bool(inner != 0 and inner == outer), "points": pts,
+            "outgoing": bool(is_out), "smallR_sign": Sign(smallR), "largeR_sign": Sign(largeR),
         })
     return roots
 
@@ -443,7 +459,10 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         theta_p = np.where(Rpos, Rth_p / np.where(Rpos, R, 1.0), np.nan)
         theta_m = np.where(Rpos, Rth_m / np.where(Rpos, R, 1.0), np.nan)
         floor = 1e3 * EPS * (np.abs(U) + np.abs(Gamma))
-        tau_p = np.maximum(kappa_theta * sig_Rth, floor)
+        # [v1.1 C6] grid noise of U (odd) and Gamma (even) enters the zero band
+        noise_U = op.sigma_noise(U, -1)
+        noise_G = op.sigma_noise(Gamma, +1)
+        tau_p = np.maximum(kappa_theta * (sig_Rth + 2.0 * noise_U + 2.0 * noise_G), floor)
         tau_m = tau_p.copy()
 
         def _sign(v, tau):
@@ -498,22 +517,48 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
             for arr in (ham, mom, hamM, ham_rel, mom_rel, hamM_rel, sig_ham, sig_mom, sig_hamM):
                 arr[:] = np.nan
 
-        def _pstatus(X, sig, Tabs, evaluated):
+        # [v1.1 C4] round-off scale S_X of the terms *before* cancellation (derivative terms:
+        # stencil magnitude sum_k |w_k||f_k|), so that the VIOLATED floor never vanishes
+        absG = op.abs_apply(Gamma, 1)
+        S_ham = (2.0 * (1.0 + Gamma ** 2) / Rs ** 2 + 4.0 * absG / (A * Rs)
+                 + 4.0 * np.abs(KA * KB) + 2.0 * KB ** 2 + 4.0 * FOUR_PI * np.abs(rho))
+        S_mom = ((np.abs(dKB) if slc.dKB is not None else op.abs_apply(KB, 1))
+                 + np.abs(dR / Rs) * (np.abs(KA) + np.abs(KB)) + FOUR_PI * np.abs(j_r))
+        Mtilde = 0.5 * R * (1.0 + Gamma ** 2 + U ** 2)
+        S_hamM = (op.abs_apply(Mtilde, 1) + FOUR_PI * R ** 2 * np.abs(rho * dR)
+                  + FOUR_PI * R ** 2 * np.abs(U * j_r))
+
+        # Resolution scale of H_M: sum|T_k| with the M' term replaced by the magnitude of its
+        # un-cancelled pieces (R'/2)(1+Gamma^2+U^2) + R(|Gamma Gamma'| + |U U'|). The literal
+        # sum|T_k| contains only |M'| in vacuum (M' ~ 0 there), which would make every vacuum
+        # slice UNRESOLVED. Used ONLY for the resolution test, not for H_M or its rel value.
+        dU = -dR * KB - R * dKB
+        res_hamM = (0.5 * np.abs(dR) * (1.0 + Gamma ** 2 + U ** 2)
+                    + R * (np.abs(Gamma * dG) + np.abs(U * dU))
+                    + np.abs(HT[1]) + np.abs(HT[2]))
+
+        def _pstatus(X, sig, Tabs, S, evaluated, Tres=None):
+            Tres = Tabs if Tres is None else Tres
             st = np.full(N, "NOT_EVALUATED", dtype=CLASS_DTYPE)
             if not has_matter:
                 return st
             fin = np.isfinite(X) & np.isfinite(sig) & np.isfinite(Tabs)
-            viol = fin & (np.abs(X) > kappa_c * sig + 1e3 * EPS * Tabs)
+            fl = 1e3 * EPS * np.maximum(Tabs, np.where(np.isfinite(S), S, 0.0))
+            viol = fin & (np.abs(X) > kappa_c * sig + fl)
+            # [v1.1 C7] resolution: sigma(X) > 0.1 sum|T_k| (and above the round-off floor; at
+            # R = 0 all terms vanish identically and resolution is not defined)
+            unres = fin & ~viol & (sig > 0.1 * Tres) & (sig > fl) & (R != 0.0)
             st[evaluated & fin] = "CONSISTENT"
+            st[evaluated & unres] = "UNRESOLVED"
             st[evaluated & viol] = "VIOLATED"
             st[evaluated & ~fin] = "INVALID"
             st[~evaluated] = "CENTER_EXCLUDED"
             return st
 
         allpts = np.ones(N, dtype=bool)
-        ham_status = _pstatus(ham, sig_ham, ham_abs, ~(R == 0.0))
-        mom_status = _pstatus(mom, sig_mom, mom_abs, ~(R == 0.0))
-        hamM_status = _pstatus(hamM, sig_hamM, hamM_abs, allpts)
+        ham_status = _pstatus(ham, sig_ham, ham_abs, S_ham, ~(R == 0.0))
+        mom_status = _pstatus(mom, sig_mom, mom_abs, S_mom, ~(R == 0.0))
+        hamM_status = _pstatus(hamM, sig_hamM, hamM_abs, S_hamM, allpts, res_hamM)
 
         # ---- integral masses (§6) -------------------------------------------------------------
         if has_matter and proj is not None:
@@ -532,11 +577,12 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
     cmask[pos[:n_c]] = True
     omask = np.zeros(N, dtype=bool)
     omask[N - 4:] = True
-    regions["center"] = cmask
-    regions["outer"] = omask
+    inner_name = _region_names(center)[1]
+    regions[inner_name] = cmask
     regions["bulk"] = Rpos & ~cmask & ~omask
+    regions["outer"] = omask
     dV = FOUR_PI * R ** 2 * A
-    norms = _empty_norms()
+    norms = _empty_norms(center)
     if has_matter:
         for name, X, Xr in (("ham", ham, ham_rel), ("mom", mom, mom_rel),
                             ("hamM", hamM, hamM_rel)):
@@ -582,7 +628,7 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
              + _find_roots("-", r, R, M, Gamma, Rth_m, tau_m, s_m, Rth_p, tau_p, usable))
     roots.sort(key=lambda d: (d["r"], d["which"]))
     ah_roots = [d for d in roots if d["ah_candidate"]]
-    outer_ah = max(ah_roots, key=lambda d: d["r"]) if ah_roots else None
+    outer_ah = max(ah_roots, key=lambda d: d["R"]) if ah_roots else None   # outermost by R
 
     # ---- data status (§9) ----------------------------------------------------------------------
     failures = []
@@ -615,16 +661,58 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         data_status = "OK"
 
     # ---- constraint status -------------------------------------------------------------------
-    if not has_matter:
+    # ---- [v1.1 C9] warnings (do not change the data status) ------------------------------------
+    extra = {"center_deviation": False, "M_int_mismatch": np.nan, "n_M_negative": 0,
+             "n_rel_undefined": {"ham": 0, "mom": 0, "hamM": 0}}
+    if center in ("vertex", "cell") and np.isfinite(cc["Gamma0"]):
+        Kmax = float(np.nanmax(np.abs(np.concatenate([KA, KB]))))
+        dG0 = abs(cc["Gamma0"] - 1.0)
+        dK0 = abs(cc["KA_minus_KB0"])
+        if dG0 > max(kappa_theta * cc["sigma_Gamma0"], 1e-8) or dK0 > 1e-8 * Kmax:
+            extra["center_deviation"] = True
+            warnings.append(f"centre deviation: |Gamma(0)-1| = {dG0:.3e}, "
+                            f"|K_A(0)-K_B(0)| = {dK0:.3e} (regularity not satisfied/resolved)")
+    with np.errstate(all="ignore"):
+        nM = int(np.sum(M < -(kappa_theta * sig_M + 1e3 * EPS * Mtilde)))
+    if nM:
+        extra["n_M_negative"] = nM
+        warnings.append(f"M_MS < -kappa sigma_M at {nM} point(s)")
+    if has_matter and proj is not None:
+        with np.errstate(all="ignore"):
+            den = np.nanmax(np.abs(M)) + np.nanmax(sig_M)
+            mism = float(np.nanmax(np.abs(M_int - M)) / den) if den > 0 else \
+                float(np.nanmax(np.abs(M_int - M)))
+        extra["M_int_mismatch"] = mism
+        if not np.isfinite(mism) or mism > 1e-6:
+            warnings.append(f"M_int_mismatch: max|M_int - M_MS|/(max|M_MS| + max sigma_M) = "
+                            f"{mism:.3e}")
+        for name, Tabs, ev in (("ham", ham_abs, R != 0.0), ("mom", mom_abs, R != 0.0),
+                               ("hamM", hamM_abs, allpts)):
+            n = int(np.sum(ev & np.isfinite(Tabs) & (Tabs == 0)))
+            extra["n_rel_undefined"][name] = n
+        if any(extra["n_rel_undefined"].values()):
+            warnings.append(f"n_rel_undefined: relative residuals undefined (all terms zero) at "
+                            f"{extra['n_rel_undefined']} point(s)")
+    if center == "cell" and has_matter:
+        warnings.append("center='cell': M_rho, M_flux, M_prop start at r[0] > 0; the ball "
+                        "[0, r[0]] is not included (M_int starts from M_MS(r[0]))")
+
+    # [v1.1 C7] priority NOT_EVALUATED (no matter or data != OK) > VIOLATED > UNRESOLVED > CONSISTENT
+    # the 5 % rule is applied per residual X (fraction of the points where X was evaluated)
+    sts = (ham_status, mom_status, hamM_status)
+    frac_unres = []
+    for st in sts:
+        n_eval = int(np.isin(st, ("CONSISTENT", "VIOLATED", "UNRESOLVED")).sum())
+        frac_unres.append(int((st == "UNRESOLVED").sum()) / n_eval if n_eval else 0.0)
+    unres_inner = any(bool(((st == "UNRESOLVED") & cmask).any()) for st in sts)
+    if not has_matter or data_status != "OK":
         c_status = "NOT_EVALUATED"
+    elif any((st == "VIOLATED").any() for st in sts):
+        c_status = "VIOLATED"
+    elif max(frac_unres) > 0.05 or unres_inner:
+        c_status = "UNRESOLVED"
     else:
-        any_viol = any((st == "VIOLATED").any() for st in (ham_status, mom_status, hamM_status))
-        if any_viol:
-            c_status = "VIOLATED"
-        elif data_status != "OK":
-            c_status = "NOT_EVALUATED"
-        else:
-            c_status = "CONSISTENT_WITH_TRUNCATION"
+        c_status = "CONSISTENT_WITH_TRUNCATION"
 
     # ---- geometry status (§7, precedence) ------------------------------------------------------
     trapped = np.isin(cls, (FUTURE_TRAPPED, PAST_TRAPPED))
@@ -634,20 +722,27 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
             point_roots[p].append(d)
     uncertain = False
     unexplained = []
-    for i in np.flatnonzero(np.isin(cls, (FUTURE_MARGINAL, DOUBLY_MARGINAL))):
+    def _resolved(d):
+        # root of known type whose two sides are resolved and differ (a tangential zero --
+        # MOTS pair birth -- or a root touching the grid edge does not count)
+        return (d["type"] in (FUTURE_MOTS, PAST_MOTS) and d["inner_sign"] != 0
+                and d["outer_sign"] != 0 and not d["tangential"])
+
+    # [v1.1 C2/C3] marginal points of ANY type must be explained by a resolved root of known
+    # type; exception (priority over UNCERTAIN): isolated DOUBLY_MARGINAL / DEGENERATE point
+    # without trapped neighbours -> NO_TRAPPED_SPHERES + marginal_present
+    exempt = np.zeros(N, dtype=bool)
+    for i in np.flatnonzero(np.isin(cls, (FUTURE_MARGINAL, PAST_MARGINAL, DOUBLY_MARGINAL))):
         rel = [d for d in point_roots.get(int(i), [])
                if (d["which"] == "+" and s_p[i] == 0) or (d["which"] == "-" and s_m[i] == 0)]
         left = i - 1 >= 0 and trapped[i - 1]
         right = i + 1 < N and trapped[i + 1]
-        # explained by a root of known type whose two sides are resolved and differ
-        # (a tangential zero -- MOTS pair birth -- or a root at the grid edge does not count)
-        if any(d["type"] in (FUTURE_MOTS, PAST_MOTS) and d["inner_sign"] != 0
-               and d["outer_sign"] != 0 and not d["tangential"] for d in rel):
+        if any(_resolved(d) for d in rel):
             continue
-        if left and right:
+        if not (left or right) and (cls[i] == DOUBLY_MARGINAL
+                                    or (rel and all(d["type"] == DEGENERATE for d in rel))):
+            exempt[i] = True
             continue
-        if rel and all(d["type"] == DEGENERATE for d in rel) and not (left or right):
-            continue  # isolated marginal point with a DEGENERATE root (marginal_present)
         uncertain = True
         unexplained.append(int(i))
     degenerate_near_trapped = False
@@ -670,10 +765,19 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         geometry = "FUTURE_TRAPPED_NO_AH_CANDIDATE"
     elif uncertain:
         geometry = "UNCERTAIN"
-    elif np.isin(cls, (PAST_TRAPPED, PAST_MARGINAL)).any():
-        geometry = "PAST_TRAPPED_ONLY"
     else:
-        geometry = "NO_TRAPPED_SPHERES"
+        past = ((cls == PAST_TRAPPED).any()
+                or any(d["type"] == PAST_MOTS and _resolved(d) for d in roots))
+        future = any(d["type"] == FUTURE_MOTS for d in roots)
+        benign = np.isin(cls, (NORMAL, NORMAL_REVERSED, CENTER)) | exempt
+        if past and not future:
+            geometry = "PAST_TRAPPED_ONLY"
+        elif benign.all() and not future and not past:
+            geometry = "NO_TRAPPED_SPHERES"
+        else:
+            # not covered by the §7 list (e.g. a non-candidate future MOTS without trapped
+            # points, or past and future MOTS together): conservative choice
+            geometry = "UNCERTAIN"
     marginal_present = bool(np.isin(cls, (FUTURE_MARGINAL, PAST_MARGINAL, DOUBLY_MARGINAL)).any())
 
     status = {
@@ -681,6 +785,10 @@ def diagnose(slc, matter=None, *, kappa_theta=3.0, kappa_c=10.0):
         "marginal_present": marginal_present, "errors": errors, "warnings": warnings,
         "numerical_failures": failures, "n_invalid_points": int(invalid_pt.sum()),
         "uncertain_points": unexplained, "degenerate_root_near_trapped": degenerate_near_trapped,
+        **extra,
+        "n_unresolved": {"ham": int((ham_status == "UNRESOLVED").sum()),
+                         "mom": int((mom_status == "UNRESOLVED").sum()),
+                         "hamM": int((hamM_status == "UNRESOLVED").sum())},
         "n_violated": {"ham": int((ham_status == "VIOLATED").sum()),
                        "mom": int((mom_status == "VIOLATED").sum()),
                        "hamM": int((hamM_status == "VIOLATED").sum())},

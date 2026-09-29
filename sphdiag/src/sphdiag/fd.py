@@ -152,3 +152,29 @@ class RadialOperator:
         ge = self.extend(g, parity)
         seg = np.sum(self._int_w * ge[self._int_idx], axis=1)
         return np.concatenate([[0.0], np.cumsum(seg)])
+
+    def sigma_noise(self, f, parity):
+        """[v1.1 C6] grid-noise estimate: max over a 7-point window of |Delta^6 f| / sqrt(924).
+
+        Delta^6 is the undivided 6th difference (index space, coefficients 1 -6 15 -20 15 -6 1);
+        for white noise its r.m.s. is sqrt(924) times the noise r.m.s.; on smooth resolved data it
+        is O(h^6). Parity ghosts are used at a regular centre; the windows are clipped at edges.
+        """
+        fe = self.extend(f, parity)
+        Ne = fe.size
+        c = np.array([1.0, -6.0, 15.0, -20.0, 15.0, -6.0, 1.0])
+        d6 = np.abs(np.convolve(fe, c, mode="valid"))      # centres 3 .. Ne-4
+        nc = d6.size
+        e = np.arange(self.N) + self.g                      # extended index of each point
+        lo = np.clip(e - 3 - 3, 0, nc - 1)                  # window of centres [e-3, e+3]
+        hi = np.clip(e + 3 - 3, 0, nc - 1)
+        pad = np.concatenate([d6, np.full(7, -np.inf)])
+        win = np.lib.stride_tricks.sliding_window_view(pad, 7)[:nc]   # win[j] = d6[j:j+7]
+        out = np.empty(self.N)
+        span = hi - lo
+        full = span == 6
+        out[full] = win[lo[full]].max(axis=1)
+        for i in np.flatnonzero(~full):
+            out[i] = d6[lo[i]:hi[i] + 1].max()
+        # NaN propagation (np.max ignores nothing; keep NaN if present)
+        return out / np.sqrt(924.0)

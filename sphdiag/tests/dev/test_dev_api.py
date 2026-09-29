@@ -41,7 +41,7 @@ def test_all_fields_present_and_shaped():
     assert d.roots[0]["which"] in ("+", "-")
     assert set(d.norms) == {"ham", "mom", "hamM"}
     for nm in d.norms:
-        assert set(d.norms[nm]) == {"all", "center", "bulk", "outer"}
+        assert set(d.norms[nm]) == {"all", "inner", "bulk", "outer"}   # center='none' (v1.1)
         for rg in d.norms[nm]:
             assert set(d.norms[nm][rg]) == {"Linf", "L2vol", "Linf_rel"}
             assert np.isfinite(d.norms[nm][rg]["Linf"])
@@ -67,7 +67,7 @@ def test_norm_definitions():
     L2 = np.sqrt(np.trapezoid(X ** 2 * 4 * np.pi * d.R ** 2 * kw["A"], r))
     assert abs(d.norms["hamM"]["all"]["L2vol"] - L2) <= 1e-12 * L2
     assert d.norms["hamM"]["outer"]["Linf"] == np.max(np.abs(X[-4:]))
-    assert d.norms["hamM"]["center"]["Linf"] == np.max(np.abs(X[:6]))  # max(4, 120//20)
+    assert d.norms["hamM"]["inner"]["Linf"] == np.max(np.abs(X[:6]))  # max(4, 120//20)
 
 
 def test_pi_from_dtphi():

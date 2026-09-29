@@ -1,7 +1,7 @@
 # sphdiag
 
 Physical diagnostics of spherically symmetric 3+1 slices, implementing
-`physics_contract.md` v1.0 (PBH-VERIFY-01). The package only **measures**: it does not
+`physics_contract.md` v1.1 (PBH-VERIFY-01; implementation B v0.2). The package only **measures**: it does not
 evolve data, solve constraints or impose boundary/regularity conditions.
 
 Needs Python 3.12 and numpy/scipy. Import it with `PYTHONPATH=src`.
@@ -54,11 +54,26 @@ These are the contract §10 fields plus extras:
 Root signs (`other_sign`, `inner_sign`, `outer_sign`) are `Sign` objects. A `Sign` is an int
 (−1/0/+1) that also compares equal to `'-'`, `'0'` and `'+'`.
 
+## Statuses (contract v1.1)
+
+- `status['constraints']`: `NOT_EVALUATED` (no matter or data != OK) > `VIOLATED` > `UNRESOLVED`
+  (σ(X) > 0.1 Σ|T_k| at > 5 % of the points of any residual, or at any point of the
+  `center`/`inner` region) > `CONSISTENT_WITH_TRUNCATION`. Per point: `ham_status` etc.
+- AH candidate: zero of the outgoing expansion θ_out (θ₊ if Γ > 0, θ₋ if Γ < 0), other
+  expansion < 0, θ_out < 0 on the smaller-R side and > 0 on the larger-R side; independent of
+  the direction of the r label. `outer_ah_candidate` = largest R.
+- R = 0 is allowed only at r[0] with `center="vertex"`.
+- Warnings (`status['warnings']`, plus `center_deviation`, `M_int_mismatch`, `n_M_negative`,
+  `n_rel_undefined` keys) never change the data status.
+- Norm regions: `all`, `center` (`inner` when `center="none"`), `bulk`, `outer`.
+
 ## Numerics
 
 - The derivative stencils use Fornberg weights: 5 points (order 4) for the values and 7 points
   (order 6) for the error estimate σ(f′) = |D⁴f − D⁶f| + ε·Σ|w_k f_k|.
 - At a regular centre the parity ghosts are A, K_A, K_B, φ, Π, Γ even and R, U, M odd.
   Stencils are one-sided at the outer edge and for `center="none"`.
+- Zero band of Rθ±: τ = max(κ(σ(Rθ) + 2σ_noise(U) + 2σ_noise(Γ)), 1e3 ε(|U| + |Γ|)), where
+  σ_noise is the windowed max of the undivided 6th difference divided by √924.
 - Integral masses integrate from r[0] with the exact integral of the local cubic interpolant
   (order 4).
