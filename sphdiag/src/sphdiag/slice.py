@@ -70,7 +70,7 @@ class SphericalSlice:
                 msg = f"{name}: shape {a.shape} does not match r ({N},)"
                 if name in ("alpha", "beta"):
                     # not used by the diagnostics: a warning, not an input error
-                    self.warnings.append(msg + " (ignored)")
+                    self.warnings.append("ALPHA_BETA: " + msg + " (ignored)")
                     arrays[name] = None
                     continue
                 self.errors.append(msg)
@@ -95,7 +95,7 @@ class SphericalSlice:
             scale = max(abs(rr[-1]), abs(rr[1]))
             if rr[0] != 0.0:
                 if abs(rr[0]) <= 64 * EPS * scale:
-                    self.warnings.append(f"vertex centre: r[0] = {rr[0]:.3e} snapped to 0")
+                    self.warnings.append(f"OTHER: vertex centre: r[0] = {rr[0]:.3e} snapped to 0")
                     rr = rr.copy()
                     rr[0] = 0.0
                 else:
@@ -141,7 +141,7 @@ class SphericalSlice:
             if center == "vertex" and np.isfinite(self.R[0]) and self.R[0] != 0.0:
                 rscale = np.nanmax(np.abs(self.R)) if np.isfinite(self.R).any() else 0.0
                 if abs(self.R[0]) <= 64 * EPS * rscale:
-                    self.warnings.append(f"vertex centre: R[0] = {self.R[0]:.3e} snapped to 0")
+                    self.warnings.append(f"OTHER: vertex centre: R[0] = {self.R[0]:.3e} snapped to 0")
                     self.R = self.R.copy()
                     self.R[0] = 0.0
                 else:
@@ -158,11 +158,11 @@ class SphericalSlice:
             # alpha / beta: not used by the diagnostics -> warnings only
             if self.alpha is not None:
                 if not np.all(np.isfinite(self.alpha)):
-                    self.warnings.append("alpha has non-finite values (not used by diagnostics)")
+                    self.warnings.append("ALPHA_BETA: alpha has non-finite values (not used by diagnostics)")
                 elif not np.all(self.alpha > 0):
-                    self.warnings.append("alpha <= 0 somewhere (not used by diagnostics)")
+                    self.warnings.append("ALPHA_BETA: alpha <= 0 somewhere (not used by diagnostics)")
             if self.beta is not None and not np.all(np.isfinite(self.beta)):
-                self.warnings.append("beta has non-finite values (not used by diagnostics)")
+                self.warnings.append("ALPHA_BETA: beta has non-finite values (not used by diagnostics)")
 
         self.op = RadialOperator(self.r, center) if self.structure_ok else None
 

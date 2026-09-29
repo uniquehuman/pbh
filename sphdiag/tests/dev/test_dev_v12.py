@@ -31,7 +31,7 @@ def test_one_cell_spike_is_unresolved_not_benign():
     assert d.status["n_unresolved_points"] >= 1
     assert d.status["geometry"] == "UNCERTAIN"
     assert d.sphere_class[0] == "CENTER"                        # CENTER is never UNRESOLVED
-    assert any("UNRESOLVED" in w for w in d.status["warnings"])
+    assert any(w.startswith("UNRESOLVED_POINTS:") for w in d.status["warnings"])
     # smooth version of the same slice is resolved and benign
     r = np.linspace(0, 1.0, 51)
     U = -0.3 * r * np.exp(-r ** 2)
@@ -52,7 +52,7 @@ def test_unresolved_inside_ah_candidate_keeps_candidate_and_warns():
     assert np.all(d.R[d.sphere_class == "UNRESOLVED"] < 2.0)
     assert d.status["geometry"] == "AH_CANDIDATE"
     assert abs(d.outer_ah_candidate["R"] - 2.0) < 1e-4
-    assert any("inside (in R) the AH candidate" in w for w in d.status["warnings"])
+    assert any(w.startswith("UNRESOLVED_INSIDE_AH:") for w in d.status["warnings"])
 
 
 def test_doubly_marginal_exemption_needs_two_resolved_neighbours():

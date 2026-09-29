@@ -261,13 +261,13 @@ def test_warnings():
     d = diagnose(SphericalSlice(r=r, A=np.ones(50), R=1.05 * r, KA=0.2 + 0 * r, KB=0 * r,
                                 center="vertex"))
     assert d.status["center_deviation"] is True
-    assert any("centre deviation" in w for w in d.status["warnings"])
+    assert any(w.startswith("CENTER_IRREGULAR:") for w in d.status["warnings"])
     # M_int mismatch: matter inconsistent with geometry
     kw, ex = bg.generic_slice(np.linspace(0, 3, 100))
     d = diagnose(SphericalSlice(center="vertex", **kw),
                  Projections(2 * ex["rho"], ex["j_r"], 0 * kw["r"], 0 * kw["r"]))
     assert d.status["M_int_mismatch"] > 1e-2
-    assert any("M_int_mismatch" in w for w in d.status["warnings"])
+    assert any(w.startswith("M_INT_MISMATCH:") for w in d.status["warnings"])
     # negative mass: Gamma > 1 at rest (K = 0) -> M < 0
     r = np.linspace(0, 2, 80)
     R = r + 0.2 * r ** 3
@@ -283,4 +283,4 @@ def test_warnings():
     kw, ex = bg.flrw(np.linspace(0, 1, 40), 1.0)
     d = diagnose(SphericalSlice(center="vertex", **kw),
                  Projections(ex["rho"], 1e-3 * kw["r"], 0 * kw["r"], 0 * kw["r"]))
-    assert not any("centre" in w or "negative" in w for w in d.status["warnings"])
+    assert not any(w.startswith(("CENTER_IRREGULAR", "NEGATIVE_MASS")) for w in d.status["warnings"])

@@ -96,7 +96,9 @@ def test_schwarzschild_inside_only_is_trapped_without_candidate():
 @pytest.mark.parametrize("node", [True, False])
 def test_schwarzschild_isotropic_throat(node):
     Mb = 1.0
-    r = np.linspace(0.1, 5.1, 501) if node else bg.stretched(300, 0.1, 5.0)
+    # (v0.4: with C12 the steep one-sided inner edge r = 0.1 is UNRESOLVED at N = 300; N = 600
+    # resolves it)
+    r = np.linspace(0.1, 5.1, 501) if node else bg.stretched(600, 0.1, 5.0)
     kw, ex = bg.schwarzschild_iso(r, Mb)
     d = run(kw, "none")
     assert np.max(np.abs(d.M - Mb)) < 1e-2
