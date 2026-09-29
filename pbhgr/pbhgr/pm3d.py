@@ -24,8 +24,9 @@ def zeldovich_axes(e: float, p: float):
 
 
 class PM3D:
-    def __init__(self, N: int, L: float, Np: int, seed: int = 0):
+    def __init__(self, N: int, L: float, Np: int, seed: int = 0, smooth: float = 0.0):
         self.N, self.L, self.Np = N, L, Np
+        self.smooth = smooth                          # Gaussian force smoothing length in cells (0 = plain CIC/FFT)
         self.dx = L / N
         k1 = 2 * np.pi * np.fft.fftfreq(N, d=self.dx)
         kz = 2 * np.pi * np.fft.rfftfreq(N, d=self.dx)
@@ -103,6 +104,8 @@ class PM3D:
         delta = self.deposit(self.x) / n_mean - 1.0
         dk = np.fft.rfftn(delta)
         phik = -1.5 * H_I**2 / a * dk / self.k2
+        if self.smooth > 0:
+            phik = phik * np.exp(-0.5 * self.k2 * (self.smooth * self.dx) ** 2)
         phik[0, 0, 0] = 0.0
         acc = []
         for kc in (self.kx, self.ky, self.kz):

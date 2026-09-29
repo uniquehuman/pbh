@@ -9,7 +9,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--mu", type=float, default=0.1); ap.add_argument("--e", type=float, default=0.0); ap.add_argument("--p", type=float, default=0.0)
 ap.add_argument("--N", type=int, default=128); ap.add_argument("--Np", type=int, default=64); ap.add_argument("--L", type=float, default=8.0)
 ap.add_argument("--tend", type=float, default=40.0); ap.add_argument("--tail", type=float, default=0.0); ap.add_argument("--k1", type=float, default=2.0); ap.add_argument("--k2", type=float, default=10.0)
-ap.add_argument("--profile", default="yoo"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--da_frac", type=float, default=0.02); ap.add_argument("--out", default="runs/pm3d")
+ap.add_argument("--profile", default="yoo"); ap.add_argument("--seed", type=int, default=0); ap.add_argument("--smooth", type=float, default=2.0); ap.add_argument("--da_frac", type=float, default=0.02); ap.add_argument("--out", default="runs/pm3d")
 args = ap.parse_args()
 from pathlib import Path; Path(args.out).mkdir(parents=True, exist_ok=True)
 table = profile_table(args.profile); table["name"] = args.profile
@@ -17,8 +17,8 @@ L_ref = LTBGaussian(args.mu) if args.profile == "yoo" else LTBProfile(args.mu, t
 rm, t_H = L_ref.r_m, L_ref.t_H
 tC0 = L_ref.tC(1e-6)
 if not np.isfinite(tC0): tC0 = L_ref.tC(rm)
-pm = PM3D(args.N, args.L * rm, args.Np, seed=args.seed).make_ic(args.mu, table["spline"], args.e, args.p, args.tail, (args.k1, args.k2))
-tag = f"mu{args.mu:g}_e{args.e:g}_p{args.p:g}_N{args.N}_Np{args.Np}_L{args.L:g}" + (f"_tail{args.tail:g}_k{args.k1:g}-{args.k2:g}_s{args.seed}" if args.tail > 0 else "") + (f"_{args.profile}" if args.profile != "yoo" else "")
+pm = PM3D(args.N, args.L * rm, args.Np, seed=args.seed, smooth=args.smooth).make_ic(args.mu, table["spline"], args.e, args.p, args.tail, (args.k1, args.k2))
+tag = f"mu{args.mu:g}_e{args.e:g}_p{args.p:g}_N{args.N}_Np{args.Np}_L{args.L:g}_sm{args.smooth:g}" + (f"_tail{args.tail:g}_k{args.k1:g}-{args.k2:g}_s{args.seed}" if args.tail > 0 else "") + (f"_{args.profile}" if args.profile != "yoo" else "")
 print(f"PM3D {tag}: box {args.L} r_m = {args.L*rm:.2f}/k, dx = {pm.dx:.4f}/k ({pm.dx/rm:.4f} r_m), {args.Np**3} particles, m_part = {pm.m_part:.3e}; axes A = {np.round(pm.A,3)}; "
       f"t_C(0) = {tC0/t_H:.2f} t_H, run to {args.tend} t_H; central delta_lin(a=1) = {pm.delta_lin[args.N//2, args.N//2, args.N//2]:.4f} (expected 0.4 mu/25 = {0.4*args.mu/25:.4f}); tail rms on grid = {pm.tail_rms_grid:.4f}", flush=True)
 a = 1.0; t = T_I; step = 0; rows = []; t0 = time.time(); next_diag = 0.0
