@@ -55,8 +55,9 @@ def main(run):
                     if mm.max() >= thr:
                         j = np.argmax(mm >= thr)
                         print(f"  M_AH = {thr} M_H reached at t = {tt[j]/tC0:.4f} t_C(0)")
-                print("  1D references (mu = 0.1, runs/v1/ref3d): cold M_AH = 0.1/0.3 M_H at 1.428/1.922 t_C(0); "
-                      "sigma_ent = 0.054: 1.548/1.959 t_C(0); first tiny AH 1.120/1.212")
+                refs = {0.1: "cold M_AH = 0.1/0.3 M_H at 1.428/1.922 t_C(0); sigma_ent = 0.054: 1.548/1.959; first tiny AH 1.120/1.212",
+                        0.3: "cold M_AH = 0.1/0.3 M_H at 1.691/2.034 t_C(0); sigma_ent = 0.027: 1.669/2.078; first tiny AH 1.352/1.451"}
+                print("  1D references (runs/v1/ref3d): " + refs.get(round(S["mu"], 2), "none tabulated for this mu"))
 
 
 if __name__ == "__main__":
