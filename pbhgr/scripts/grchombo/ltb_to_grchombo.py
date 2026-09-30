@@ -118,6 +118,9 @@ def main():
     ap.add_argument("--rho_thr", type=str, default="0 0 50 300",
                     help="density gate per level in units of rho_far(t_0): level l+1 only where rho > rho_thr[l] rho_far")
     ap.add_argument("--diag_interval", type=int, default=8, help="coarse steps between data_out/lineout outputs")
+    ap.add_argument("--teclyn_levels", type=int, default=0, help="GRTeclyn params: amr.max_level (nested halves)")
+    ap.add_argument("--teclyn_gauge", type=int, default=0, help="GRTeclyn params: 1 = weak 1+log + Gamma driver, 0 = geodesic")
+    ap.add_argument("--teclyn_ah_interval", type=int, default=0, help="GRTeclyn params: AH search every N coarse steps (0 = off)")
     ap.add_argument("--lapse_coeff", type=float, default=0.3,
                     help="1+log coefficient: d_t alpha = -coeff alpha (K - fref K_far); 2 = standard (freezes the core)")
     ap.add_argument("--boxsize", type=int, default=16)
@@ -224,24 +227,39 @@ amr.plot_vars = chi lapse K rho_p
 amr.n_cell = {a.N} {a.N} {a.N}
 geometry.prob_extent = {L:.6f} {L:.6f} {L:.6f}
 geometry.is_periodic = 1 1 1
-amr.max_level = 0
+amr.max_level = {a.teclyn_levels}
 amr.regrid_int = -1
 amr.max_grid_size = {a.boxsize}
-amr.blocking_factor = {a.boxsize}
+amr.blocking_factor = 8
+amr.n_error_buf = 0
+geometry.center = {L / 2:.6f} {L / 2:.6f} {L / 2:.6f}
 evolution.dt_multiplier = {a.cfl}
 evolution.stop_time = {stop:.4f}
 evolution.max_steps = {a.max_steps}
 evolution.sigma = 0.3
-gauge.lapse_advec_coeff = 0.0
-gauge.lapse_coeff = 0.0
+# gauge: 0 = geodesic slicing (LTB comparison before the caustic), 1 = weak profile-referenced 1+log + Gamma driver
+gauge.lapse_advec_coeff = {1.0 if a.teclyn_gauge else 0.0}
+gauge.lapse_coeff = {a.lapse_coeff if a.teclyn_gauge else 0.0}
 gauge.lapse_power = 1.0
 gauge.shift_advec_coeff = 0.0
-gauge.shift_Gamma_coeff = 0.0
+gauge.shift_Gamma_coeff = {0.75 if a.teclyn_gauge else 0.0}
 gauge.eta = {1.0 / MH:.6e}
 ccz4.formulation = 1
 pbh_vlasov.init = table
 pbh_vlasov.table = ltb_vlasov_table.dat
 pbh_vlasov.n_per_dir = 2
+pbh_vlasov.lattice_buffer = 2
+# apparent-horizon search: every ah_interval coarse steps from t = ah_start (run time), guess radius in coordinates
+pbh_vlasov.ah_interval = {a.teclyn_ah_interval}
+pbh_vlasov.ah_start = {max(0.0, a.ah_start * tC0 - t0):.4f}
+pbh_vlasov.ah_guess = {0.1 * rm_phys:.4f}
+pbh_vlasov.ah_num_particles = 2000
+pbh_vlasov.ah_max_iter = 3000
+ah_finder.eta = 3.0
+ah_finder.c = 1.0
+ah_finder.tolerance = 1e-4
+ah_finder.r = 1.15
+ah_finder.cfl_factor = 7.0
 rho_line_extraction.enabled = true
 rho_line_extraction.end = {L * (1 - 1.0 / a.N):.6f} {L / 2:.6f} {L / 2:.6f}
 chi_line_extraction.enabled = true
