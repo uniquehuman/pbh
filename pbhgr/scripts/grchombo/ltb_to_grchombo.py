@@ -173,6 +173,11 @@ def main():
     hdr = (f"LTB slice mu={a.mu} t0={t0:.8e} (= {a.f0} tC0, tC0={tC0:.8e}, tH={tH:.8e}) a0={a0:.8e} k=1 H_i=5\n"
            f"columns: varrho(isotropic physical radius at t_0)  chi  K  A^rho_rho  Pi ; uniform spacing, last row = FLRW")
     np.savetxt(table, np.column_stack([vr, chi_t, K_t, Arr_t, Pi_t]), header=hdr, fmt="%.12e")
+    # Vlasov (GRTeclyn PBHVlasov) table: rho (normal-observer dust density), u_r = 0 in the synchronous slice
+    rho_t = 0.5 * Pi_t ** 2
+    np.savetxt(os.path.join(a.out, "ltb_vlasov_table.dat"),
+               np.column_stack([vr, chi_t, K_t, Arr_t, rho_t, np.zeros_like(vr)]),
+               header=hdr.replace("Pi", "rho  u_r"), fmt="%.12e")
 
     # --- grid and time-step choices
     rm_phys = float(np.interp(rm, r, varrho))
@@ -195,6 +200,8 @@ def main():
     MH = 0.75 * tH
     t_hor_exp = 1.1203 * tC0 - t0
     plot_int = max(1, int(round(a.plot_every * tC0 / dt)))
+    t0_tH_str = f"{t0 / tH:.4f}"
+    plot_v = max(1, int(round(a.plot_every * tC0 / (a.cfl * dx / 2 ** a.max_level))))
     params = PARAMS.format(mu=a.mu, f0=a.f0, t0_tH=t0 / tH, a0=a0, mtH=a.mtH, q=q, sigma=sigma, tH=tH, tC0=tC0, MH=MH,
                            rm_phys=rm_phys, t_hor_exp=t_hor_exp, chk_int=10 * plot_int, plot_int=plot_int, m=m,
                            table=os.path.basename(table), rho_far=rho_far, lineout=3 * a.N, c=L / 2, N=a.N, L=L,
@@ -207,6 +214,45 @@ def main():
                            lapse_coeff=a.lapse_coeff)
     with open(os.path.join(a.out, "params.txt"), "w") as fh:
         fh.write(params)
+    dt_v = a.cfl * dx / 2 ** a.max_level  # particle run: CFL-limited only (no oscillation constraint)
+    grteclyn = f"""# PBHVlasov (GRTeclyn) — LTB e = 0 late start on particles, mu = {a.mu}, t_0 = {a.f0} t_C(0) = {t0_tH_str} t_H
+# t_C(0) = {tC0:.6f}, t_H = {tH:.6f}, M_H = {MH:.4f}; GRTeclyn time t = physical time - t_0
+amr.verbose = 1
+amr.plot_int = {plot_v}
+amr.check_int = {10 * plot_v}
+amr.plot_vars = chi lapse K rho_p
+amr.n_cell = {a.N} {a.N} {a.N}
+geometry.prob_extent = {L:.6f} {L:.6f} {L:.6f}
+geometry.is_periodic = 1 1 1
+amr.max_level = 0
+amr.regrid_int = -1
+amr.max_grid_size = {a.boxsize}
+amr.blocking_factor = {a.boxsize}
+evolution.dt_multiplier = {a.cfl}
+evolution.stop_time = {stop:.4f}
+evolution.max_steps = {a.max_steps}
+evolution.sigma = 0.3
+gauge.lapse_advec_coeff = 0.0
+gauge.lapse_coeff = 0.0
+gauge.lapse_power = 1.0
+gauge.shift_advec_coeff = 0.0
+gauge.shift_Gamma_coeff = 0.0
+gauge.eta = {1.0 / MH:.6e}
+ccz4.formulation = 1
+pbh_vlasov.init = table
+pbh_vlasov.table = ltb_vlasov_table.dat
+pbh_vlasov.n_per_dir = 2
+rho_line_extraction.enabled = true
+rho_line_extraction.end = {L * (1 - 1.0 / a.N):.6f} {L / 2:.6f} {L / 2:.6f}
+chi_line_extraction.enabled = true
+chi_line_extraction.end = {L * (1 - 1.0 / a.N):.6f} {L / 2:.6f} {L / 2:.6f}
+K_line_extraction.enabled = true
+K_line_extraction.end = {L * (1 - 1.0 / a.N):.6f} {L / 2:.6f} {L / 2:.6f}
+lapse_line_extraction.enabled = true
+lapse_line_extraction.end = {L * (1 - 1.0 / a.N):.6f} {L / 2:.6f} {L / 2:.6f}
+"""
+    with open(os.path.join(a.out, "params_vlasov.txt"), "w") as fh:
+        fh.write(grteclyn)
     setup = dict(mu=a.mu, f0=a.f0, t0=t0, tC0=tC0, tH=tH, ti=ti, a0=a0, rm=rm, rm_phys=rm_phys, L=L, N=a.N, dx=dx,
                  m=m, mtH=a.mtH, q=q, sigma_ent=sigma, dt=dt, dt_osc=dt_osc, dt_cfl=dt_cfl, dt_multiplier=dtm,
                  use_subcycling=subcyc, fixed_dt=fixed_dt, dx_finest=dx_fine, lapse_coeff=a.lapse_coeff,
