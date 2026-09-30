@@ -15,6 +15,7 @@
 #include <AMReX_ParticleInterpolators.H>
 #include <AMReX_ParticleMesh.H>
 #include <AMReX_AmrParGDB.H>
+#include <AMReX_AmrParticles.H> // provides ParticleContainer::AssignDensity (multilevel)
 #include <AMReX_Particles.H>
 
 #include "FourthOrderDerivatives.hpp"
@@ -23,11 +24,14 @@
 
 namespace VlasovIdx
 {
-// AoS real components
+// AoS real components: 10 deposit slots first (AMReX AssignDensity uses rdata(0) as the mass and deposits
+// rdata(0)*rdata(k) for k = 1..9), then the particle state
 enum
 {
-    m = 0, u1, u2, u3, px0, py0, pz0, u01, u02, u03, Gamma, NAOS
+    dep0 = 0, // = m Gamma (the "mass" of the deposit); dep1..dep9 = w_k / (m Gamma) with w_k = m u_i, m u_i u_j / Gamma
+    m = 10, u1, u2, u3, px0, py0, pz0, u01, u02, u03, Gamma, NAOS
 };
+constexpr int NDEP = 10;
 // interpolated field layout (SoA): value then d/dx, d/dy, d/dz for each of the 11 metric fields
 constexpr int NMET = 11;      // lapse, shift1..3, chi, h11 h12 h13 h22 h23 h33
 constexpr int NFLD = 4 * NMET; // 44
@@ -41,19 +45,33 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, Vlas
     using ParticleType = PC::ParticleType;
 
     VlasovParticles() = default;
-    void setup(GRAmr *a_gr_amr) { this->Define(static_cast<amrex::ParGDBBase *>(a_gr_amr->GetParGDB())); }
+    void setup(GRAmr *a_gr_amr)
+    {
+        this->Define(static_cast<amrex::ParGDBBase *>(a_gr_amr->GetParGDB()));
+        this->reserveData();
+        this->resizeData();
+    }
 
-    //! uniform lattice of nppc^(1/3) per cell per direction with mass = rho * dV / nppc and u_i = 0 (FLRW dust)
-    void init_uniform(int lev, const amrex::Geometry &geom, amrex::Real rho, int n_per_dir);
+    //! finest level whose grids (grown by m_lattice_buffer level-0 cells) cover level-0 cell iv0, so that the
+    //! level-l particle lattice extends a buffer beyond the level-l grids and the coarse–fine interface sees
+    //! particles of uniform mass (AMReX ghost/virtual particles then deposit smoothly)
+    int finest_level_covering(const amrex::IntVect &iv0) const;
+    void set_lattice_buffer(int n) { m_lattice_buffer = n; }
+
+    //! uniform lattice created on level 0 over the whole domain with n_per_dir * 2^l particles per direction in
+    //! every level-0 cell covered by level l (so that each level has n_per_dir^3 particles per own cell),
+    //! mass = rho * dV_fine / n_per_dir^3 and u_i = 0 (FLRW dust); particles are then redistributed to their levels
+    void init_uniform(const amrex::Geometry &geom, amrex::Real rho, int n_per_dir);
 
     //! spherical tabulated data: rho(r) (normal-observer density) and radial u_r(r) about the box centre,
     //! particles on a uniform lattice with mass = rho(r_p) sqrt(gamma) dV / nppc (sqrt(gamma) from chi(r))
-    void init_from_table(int lev, const amrex::Geometry &geom, const std::vector<amrex::Real> &r_tab,
+    void init_from_table(const amrex::Geometry &geom, const std::vector<amrex::Real> &r_tab,
                          const std::vector<amrex::Real> &rho_tab, const std::vector<amrex::Real> &ur_tab,
                          const std::vector<amrex::Real> &chi_tab, int n_per_dir);
 
-    //! deposit rho_p, S_i, S_ij into the matter components of a_state (interior cells) on level lev
-    void deposit(int lev, amrex::MultiFab &a_state, const amrex::Geometry &geom);
+    //! multilevel deposit (AMReX AssignDensity: consistent coarse–fine interfaces) of rho_p, S_i, S_ij into the
+    //! matter components of the states of all levels; a_states[lev] and a_geoms[lev] for lev = 0..finest
+    void deposit_all(const amrex::Vector<amrex::MultiFab *> &a_states, const amrex::Vector<amrex::Geometry> &a_geoms);
 
     //! interpolate lapse, shift, chi, h~ and their first derivatives from a ghost-filled state
     void interpolate_fields(int lev, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom);
@@ -61,8 +79,11 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, Vlas
     //! midpoint RK2 push by dt using the interpolated fields (calls interpolate_fields twice)
     void push(int lev, amrex::Real dt, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom);
 
-    //! total rest mass and particle count on a level (diagnostics)
+    //! total rest mass over all levels (diagnostics)
     amrex::Real total_mass(int lev);
+
+  private:
+    int m_lattice_buffer{2};
 };
 
 #endif /* VLASOVPARTICLES_HPP_ */

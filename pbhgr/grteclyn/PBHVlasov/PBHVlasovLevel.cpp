@@ -9,6 +9,8 @@
 #include "GRParmParse.hpp"
 #include "GammaCalculator.hpp"
 #include "IntegratedMovingPunctureGauge.hpp"
+#include "PBHGaugeTeclyn.hpp"
+#include "PBHAHFinder.hpp"
 #include "LineExtraction.hpp"
 #include "PositiveChiAndLapse.hpp"
 #include "StateTypes.hpp"
@@ -27,6 +29,12 @@ struct InitParams
     amrex::Real H0{1.0};      // FLRW: initial Hubble rate (K = -3 H0, rho = 3 H0^2 / 8 pi)
     std::string table;        // table mode: r chi K Arr rho ur (uniform r, isotropic coordinates)
     int n_per_dir{2};         // particles per cell per direction
+    int ah_interval{0};       // coarse steps between apparent-horizon searches (0 = off)
+    amrex::Real ah_start{0.0}; // search only for t >= ah_start
+    amrex::Real ah_guess{1.0}; // initial guess radius (coordinate)
+    int ah_num_particles{2000};
+    int ah_max_iter{2000};
+    int lattice_buffer{2};    // level-0 cells beyond a level's grids that still get that level's particle lattice
     void read()
     {
         GRParmParse pp("pbh_vlasov");
@@ -34,6 +42,12 @@ struct InitParams
         pp.query("H0", H0);
         pp.query("table", table);
         pp.query("n_per_dir", n_per_dir);
+        pp.query("ah_interval", ah_interval);
+        pp.query("ah_start", ah_start);
+        pp.query("ah_guess", ah_guess);
+        pp.query("ah_num_particles", ah_num_particles);
+        pp.query("ah_max_iter", ah_max_iter);
+        pp.query("lattice_buffer", lattice_buffer);
     }
 };
 } // namespace
@@ -96,7 +110,7 @@ void PBHVlasovLevel::initData()
             for (int c = 0; c < cell.nComp(); ++c)
                 cell[c] = 0.0;
             cell[c_chi] = 1.0; cell[c_h11] = 1.0; cell[c_h22] = 1.0; cell[c_h33] = 1.0;
-            cell[c_K] = K0; cell[c_lapse] = 1.0;
+            cell[c_K] = K0; cell[c_lapse] = 1.0; cell[c_fref] = 1.0;
         });
     }
     else
@@ -134,6 +148,7 @@ void PBHVlasovLevel::initData()
             cell[c_A11] = Ath + (Arr - Ath) * nx * nx; cell[c_A22] = Ath + (Arr - Ath) * ny * ny;
             cell[c_A33] = Ath + (Arr - Ath) * nz * nz; cell[c_A12] = (Arr - Ath) * nx * ny;
             cell[c_A13] = (Arr - Ath) * nx * nz; cell[c_A23] = (Arr - Ath) * ny * nz;
+            cell[c_fref] = K / pK[n - 1]; // 1 far away, 0 at the turned-around centre
         });
     }
     const GammaCalculator<FourthOrderDerivatives> gamma_calculator(Geom().CellSize(0));
@@ -156,29 +171,33 @@ void PBHVlasovLevel::specific_post_init()
         amr->particles.setup(amr);
     if (Level() == amr->finestLevel())
     {
+        const amrex::Geometry &geom0 = amr->getLevel(0).Geom();
+        amr->particles.set_lattice_buffer(ip.lattice_buffer);
         if (ip.mode == "flrw")
         {
             const amrex::Real rho = 3.0 * ip.H0 * ip.H0 / (8.0 * M_PI);
-            amr->particles.init_uniform(Level(), Geom(), rho, ip.n_per_dir);
+            amr->particles.init_uniform(geom0, rho, ip.n_per_dir);
         }
         else
         {
             load_table();
-            amr->particles.init_from_table(Level(), Geom(), m_tab_r, m_tab_rho, m_tab_ur, m_tab_chi, ip.n_per_dir);
+            amr->particles.init_from_table(geom0, m_tab_r, m_tab_rho, m_tab_ur, m_tab_chi, ip.n_per_dir);
         }
-        amrex::Print() << "PBHVlasov: " << amr->particles.TotalNumberOfParticles() << " particles, total rest mass "
-                       << amr->particles.total_mass(Level()) << "\n";
         amr->particles_ready = true;
+        amrex::Print() << "PBHVlasov: " << amr->particles.TotalNumberOfParticles() << " particles on "
+                       << amr->finestLevel() + 1 << " levels, total rest mass " << amr->particles.total_mass(0) << "\n";
+        amr->deposit_all_levels(state_index);
+        amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K); // far-field reference before the first RHS
     }
-    if (amr->particles_ready)
-        deposit_particles();
 }
 
 void PBHVlasovLevel::deposit_particles()
 {
+    // with subcycling each level would deposit its own particles after its push; the multilevel deposit
+    // (consistent interfaces) is done for all levels at once from the finest level's step
     auto *amr = get_vlasov_amr_ptr();
-    amrex::MultiFab &state_new = get_new_data(state_index);
-    amr->particles.deposit(Level(), state_new, Geom());
+    if (Level() == amr->finestLevel())
+        amr->deposit_all_levels(state_index);
 }
 
 void PBHVlasovLevel::specific_advance()
@@ -221,7 +240,7 @@ void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab 
     if (m_evolution_spatial_derivative_order != 4)
         amrex::Abort("PBHVlasov: spatial_derivative_order must be 4");
     const CCZ4RHSWithMatter<Matter<FourthOrderDerivatives>, FourthOrderDerivatives> ccz4_rhs(Geom().CellSize(0));
-    const IntegratedMovingPunctureGauge<FourthOrderDerivatives> gauge(Geom().CellSize(0));
+    const PBHGaugeTeclyn<FourthOrderDerivatives> gauge(Geom().CellSize(0), get_vlasov_amr_ptr()->K_far);
     amrex::ParallelFor(a_rhs, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
         ccz4_rhs.compute_chi_and_h_ij(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
     });
@@ -261,8 +280,9 @@ void PBHVlasovLevel::specific_post_timestep()
     const amrex::Real restart_time = get_gr_amr_ptr()->get_restart_time();
     const bool first_step = (time <= dt);
     auto *amr = get_vlasov_amr_ptr();
-    // box averages of chi, K, rho_p (level 0 only: single-level tests)
     amrex::MultiFab &state_new = get_new_data(state_index);
+    // far-field reference for the lapse driver: the most negative K on the coarse level (FLRW region)
+    amr->K_far = state_new.min(c_K);
     const amrex::Real chi_mean = state_new.sum(c_chi) / Geom().Domain().numPts();
     const amrex::Real K_mean = state_new.sum(c_K) / Geom().Domain().numPts();
     const amrex::Real rho_mean = state_new.sum(c_rho_p) / Geom().Domain().numPts();
@@ -289,6 +309,30 @@ void PBHVlasovLevel::specific_post_timestep()
     K_extraction.execute_query(&amr->K_interpolator);
     const LineExtraction<1> lapse_extraction("lapse_line_extraction", c_lapse, dt, time, restart_time, first_step);
     lapse_extraction.execute_query(&amr->lapse_interpolator);
+
+    // apparent-horizon search (capped flow finder from the GRTeclyn AHFinder branch)
+    InitParams ip;
+    ip.read();
+    const long step = lround(time / dt);
+    if (ip.ah_interval > 0 && time >= ip.ah_start && step % ip.ah_interval == 0)
+    {
+        const auto plo = Geom().ProbLoArray(), phi = Geom().ProbHiArray();
+        const std::array<double, AMREX_SPACEDIM> center = {0.5 * (plo[0] + phi[0]), 0.5 * (plo[1] + phi[1]),
+                                                           0.5 * (plo[2] + phi[2])};
+        const double guess = (amr->ah_last_radius > 0.0) ? 1.3 * amr->ah_last_radius : ip.ah_guess;
+        PBHAHFinder<21> finder(ip.ah_num_particles, center, guess);
+        finder.set_max_iter(ip.ah_max_iter);
+        finder.init(amr);
+        finder.find();
+        if (amrex::ParallelDescriptor::IOProcessor())
+        {
+            std::ofstream out("pbh_ah.dat", std::ios::app);
+            out.precision(10);
+            out << time << " " << (finder.converged() ? 1 : 0) << " " << finder.area() << " " << finder.mass() << " "
+                << finder.mean_radius() << " " << finder.iterations() << " " << finder.theta_norm() << "\n";
+        }
+        amr->ah_last_radius = finder.converged() ? finder.mean_radius() : -1.0;
+    }
 }
 
 void PBHVlasovLevel::specific_post_regrid(int /*a_lbase*/, int /*a_new_finest*/)
@@ -297,7 +341,7 @@ void PBHVlasovLevel::specific_post_regrid(int /*a_lbase*/, int /*a_new_finest*/)
     if (!amr->particles_ready) // called during Amr::FinalizeInit before the particles exist
         return;
     amr->particles.Redistribute();
-    deposit_particles();
+    amr->deposit_all_levels(state_index);
 }
 
 void PBHVlasovLevel::tag_cells(amrex::TagBoxArray &a_tag_box_array, const amrex::Real /*a_regrid_threshold*/)

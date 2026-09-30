@@ -8,6 +8,7 @@
 #include "IntegratedMovingPunctureGauge.hpp"
 #include "LineExtractionParameters.hpp"
 #include "ParticleMatter.hpp"
+#include "AHFinderParameters.hpp"
 
 class SimulationParameters
 {
@@ -20,6 +21,7 @@ class SimulationParameters
         IntegratedMovingPunctureGauge<FourthOrderDerivatives>::params_t::check_params();
         FixedGridsTagger::check_params();
         ParticleMatter<>::params_t::check_params();
+        ah_finder_params_t::check_params();
         line_extraction_params_t::check_params("rho_line_extraction");
         line_extraction_params_t::check_params("chi_line_extraction");
         line_extraction_params_t::check_params("K_line_extraction");

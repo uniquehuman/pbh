@@ -27,6 +27,7 @@ src_dirs := $(GRTECLYN_SOURCE)/CCZ4 \
             $(GRTECLYN_SOURCE)/Matter \
             $(GRTECLYN_SOURCE)/ParticleInterpolator \
             $(GRTECLYN_SOURCE)/Tagging \
+            $(GRTECLYN_SOURCE)/AHFinder \
             $(realpath .)
 
 # Find all source and header files in the src_dirs
