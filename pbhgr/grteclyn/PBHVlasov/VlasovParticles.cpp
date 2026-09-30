@@ -246,27 +246,74 @@ void VlasovParticles::deposit_all(const amrex::Vector<amrex::MultiFab *> &a_stat
     amrex::Vector<std::unique_ptr<amrex::MultiFab>> dep(finest + 1);
     for (int lev = 0; lev <= finest; ++lev)
     {
+        // 3 ghost cells: ghost particles may sit 2 cells outside the grids and their CIC clouds reach one more
         dep[lev] = std::make_unique<amrex::MultiFab>(this->ParticleBoxArray(lev), this->ParticleDistributionMap(lev),
-                                                     NDEP, 2);
+                                                     NDEP, 3);
         const DepositCIC<PC> f{a_geoms[lev].ProbLoArray(), a_geoms[lev].InvCellSizeArray()};
+        if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " own particles\n";
         amrex::ParticleToMesh(*this, *dep[lev], lev, f, true);
         if (lev > 0)
         {
-            const int ratio = this->GetParGDB()->refRatio(lev - 1)[0];
             VlasovParticles ghosts;
             ghosts.Define(this->GetParGDB());
             ghosts.reserveData();
             ghosts.resizeData();
             PC::ParticleTileType ghost_tile; // tile version keeps the SoA components consistent
-            this->CreateGhostParticles(lev - 1, 2, ghost_tile);     // level-(lev-1) particles within 2 coarse cells
-            ghosts.AddParticlesAtLevel(ghost_tile, lev, 2 * ratio); // kept in the ghost region of the level-lev grids
+            if (m_dep_ghosts) {
+            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " create ghosts\n";
+            this->CreateGhostParticles(lev - 1, 1, ghost_tile);     // level-(lev-1) particles within 1 coarse cell
+            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " add " << ghost_tile.numParticles() << " ghosts (rank 0)\n";
+            ghosts.AddParticlesAtLevel(ghost_tile, lev, 2);         // kept within 2 fine cells of the level-lev grids
+            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " ghost deposit\n";
             amrex::ParticleToMesh(ghosts, *dep[lev], lev, f, false);
+            }
+            if (m_dep_fine_to_coarse) {
+            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " sum_fine_to_coarse\n";
             amrex::sum_fine_to_coarse(*dep[lev], *dep[lev - 1], 0, NDEP, this->GetParGDB()->refRatio(lev - 1),
                                       a_geoms[lev - 1], a_geoms[lev]);
+            }
+            if (m_dep_virtuals)
+            {
+                // copies of the level-lev particles near the boundary of the level-lev grids, deposited on level
+                // lev-1 with the coarse kernel: the coarse cells just outside the fine grids then see the same
+                // clouds as they would from level-(lev-1) particles (covered coarse cells are replaced by the
+                // fine average below)
+                if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " virtual copies to level " << lev - 1 << "\n";
+                const amrex::BoxArray &ba = this->ParticleBoxArray(lev);
+                const auto plo = a_geoms[lev].ProbLoArray();
+                const auto dxi = a_geoms[lev].InvCellSizeArray();
+                const int margin = 2 * this->GetParGDB()->refRatio(lev - 1)[0]; // one coarse CIC cloud, in fine cells
+                PC::ParticleTileType copies;
+                amrex::Gpu::HostVector<ParticleType> host;
+                for (PC::ParIterType pti(*this, lev); pti.isValid(); ++pti)
+                {
+                    const auto &aos = pti.GetArrayOfStructs();
+                    for (const auto &p : aos)
+                    {
+                        const amrex::IntVect iv(static_cast<int>(std::floor((p.pos(0) - plo[0]) * dxi[0])),
+                                                static_cast<int>(std::floor((p.pos(1) - plo[1]) * dxi[1])),
+                                                static_cast<int>(std::floor((p.pos(2) - plo[2]) * dxi[2])));
+                        const amrex::Box nb(iv - amrex::IntVect(margin), iv + amrex::IntVect(margin));
+                        if (!ba.contains(nb)) // within 'margin' fine cells of the level's outer boundary
+                            host.push_back(p);
+                    }
+                }
+                copies.resize(host.size());
+                amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), copies.GetArrayOfStructs().begin());
+                VlasovParticles virt;
+                virt.Define(this->GetParGDB());
+                virt.reserveData();
+                virt.resizeData();
+                virt.AddParticlesAtLevel(copies, lev - 1, 0);
+                const DepositCIC<PC> fc{a_geoms[lev - 1].ProbLoArray(), a_geoms[lev - 1].InvCellSizeArray()};
+                amrex::ParticleToMesh(virt, *dep[lev - 1], lev - 1, fc, false);
+            }
         }
     }
+    if (m_verbose_deposit) amrex::Print() << "  deposit: average_down\n";
     for (int lev = finest; lev >= 1; --lev)
         amrex::average_down(*dep[lev], *dep[lev - 1], 0, NDEP, this->GetParGDB()->refRatio(lev - 1));
+    if (m_verbose_deposit) amrex::Print() << "  deposit: done\n";
     // 3) divide by sqrt(gamma) dV and copy into the states (interior cells)
     for (int lev = 0; lev <= finest; ++lev)
     {

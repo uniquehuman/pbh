@@ -173,6 +173,16 @@ void PBHVlasovLevel::specific_post_init()
     {
         const amrex::Geometry &geom0 = amr->getLevel(0).Geom();
         amr->particles.set_lattice_buffer(ip.lattice_buffer);
+        {
+            int vd = 0;
+            GRParmParse("pbh_vlasov").query("verbose_deposit", vd);
+            amr->particles.set_verbose_deposit(vd != 0);
+            int dg = 1, df = 0, dv = 1;
+            GRParmParse("pbh_vlasov").query("dep_ghosts", dg);
+            GRParmParse("pbh_vlasov").query("dep_fine_to_coarse", df);
+            GRParmParse("pbh_vlasov").query("dep_virtuals", dv);
+            amr->particles.set_deposit_options(dg != 0, df != 0, dv != 0);
+        }
         if (ip.mode == "flrw")
         {
             const amrex::Real rho = 3.0 * ip.H0 * ip.H0 / (8.0 * M_PI);

@@ -82,8 +82,16 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, Vlas
     //! total rest mass over all levels (diagnostics)
     amrex::Real total_mass(int lev);
 
+    void set_verbose_deposit(bool v) { m_verbose_deposit = v; }
+    void set_deposit_options(bool ghosts, bool fine_to_coarse, bool virtuals)
+    {
+        m_dep_ghosts = ghosts; m_dep_fine_to_coarse = fine_to_coarse; m_dep_virtuals = virtuals;
+    }
+
   private:
     int m_lattice_buffer{2};
+    bool m_verbose_deposit{false};
+    bool m_dep_ghosts{true}, m_dep_fine_to_coarse{false}, m_dep_virtuals{true};
 };
 
 #endif /* VLASOVPARTICLES_HPP_ */
