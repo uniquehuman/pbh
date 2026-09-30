@@ -168,8 +168,10 @@ void PBHVlasovLevel::specific_post_init()
         }
         amrex::Print() << "PBHVlasov: " << amr->particles.TotalNumberOfParticles() << " particles, total rest mass "
                        << amr->particles.total_mass(Level()) << "\n";
+        amr->particles_ready = true;
     }
-    deposit_particles();
+    if (amr->particles_ready)
+        deposit_particles();
 }
 
 void PBHVlasovLevel::deposit_particles()
@@ -194,6 +196,8 @@ void PBHVlasovLevel::specific_advance()
 
     // push the particles with the new metric (ghost-filled copy), then deposit the sources for the next step
     auto *amr = get_vlasov_amr_ptr();
+    if (!amr->particles_ready)
+        return;
     const amrex::Real t_new = get_state_data(state_index).curTime();
     const amrex::Real dt = get_gr_amr_ptr()->dtLevel(Level());
     amrex::MultiFab state_gh(state_new.boxArray(), state_new.DistributionMap(), state_new.nComp(), 3);
@@ -266,6 +270,7 @@ void PBHVlasovLevel::specific_post_timestep()
     const amrex::Real chi_min = state_new.min(c_chi);
     const amrex::Real lapse_min = state_new.min(c_lapse);
     const amrex::Real mass = amr->particles.total_mass(0);
+    const long np_total = amr->particles.TotalNumberOfParticles(); // collective: outside the IOProcessor block
     if (amrex::ParallelDescriptor::IOProcessor())
     {
         std::ofstream out("pbh_vlasov_out.dat", first_step ? std::ios::out : std::ios::app);
@@ -273,7 +278,7 @@ void PBHVlasovLevel::specific_post_timestep()
             out << "# time <chi> <K> <rho_p> rho_max chi_min lapse_min total_mass N_particles\n";
         out.precision(10);
         out << time << " " << chi_mean << " " << K_mean << " " << rho_mean << " " << rho_max << " " << chi_min << " "
-            << lapse_min << " " << mass << " " << amr->particles.TotalNumberOfParticles() << "\n";
+            << lapse_min << " " << mass << " " << np_total << "\n";
     }
     const LineExtraction<1> rho_extraction("rho_line_extraction", 0, dt, time, restart_time, first_step);
     const LineExtraction<1>::derived_vars_t rho_vars{VlasovEnergyDensity::name, {"rho"}, {BCParity::even}};
@@ -288,7 +293,10 @@ void PBHVlasovLevel::specific_post_timestep()
 
 void PBHVlasovLevel::specific_post_regrid(int /*a_lbase*/, int /*a_new_finest*/)
 {
-    get_vlasov_amr_ptr()->particles.Redistribute();
+    auto *amr = get_vlasov_amr_ptr();
+    if (!amr->particles_ready) // called during Amr::FinalizeInit before the particles exist
+        return;
+    amr->particles.Redistribute();
     deposit_particles();
 }
 

@@ -53,7 +53,9 @@ template <class deriv_t = FourthOrderDerivatives> class ParticleMatter
                                                               const Tensor::Rank2 &h_UU) const
     {
         emtensor_t out;
-        const Vars vars(state.cellData(ix, iy, iz));
+        // keep the CellData alive: CCZ4Vars stores a reference to it
+        const amrex::CellData<const amrex::Real> &cd = state.cellData(ix, iy, iz);
+        const Vars vars(cd);
         out.rho = vars.rho_p();
         FOR (i) { out.j(i) = vars.S_i(i); }
         FOR (i, j) { out.S(i, j) = vars.S_ij(i, j); }

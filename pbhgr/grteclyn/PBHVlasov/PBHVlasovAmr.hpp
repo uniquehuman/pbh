@@ -10,6 +10,7 @@ class PBHVlasovAmr : public GRAmr
 {
   public:
     VlasovParticles particles;
+    bool particles_ready{false}; // set once the container is defined and populated (post_init)
     ParticleInterpolator<1> rho_interpolator;
     ParticleInterpolator<1> chi_interpolator;
     ParticleInterpolator<1> K_interpolator;
