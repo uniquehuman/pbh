@@ -63,3 +63,23 @@
 - Генератор LTB-среза в изотропных координатах (`ltb_to_grchombo.py`), калибровка K − f(x)K_far (§ devlog 29–30.09),
   вложенные сферы AMR с порогом плотности, анализ M_AH(t) (`pbh_analyse.py`).
 - 1D-код V1 как эталон (карты холодная/тёплая, `runs/v1/ref3d`).
+
+## 6. Реализация: раскладка кода (GRTeclyn, ветка AHFinder fd76177 + AMReX development)
+
+Каталог `pbhgr/grteclyn/PBHVlasov/` (копируется в `GRTeclyn/Examples/PBHVlasov/`):
+
+| Файл | Назначение |
+|---|---|
+| `StateVariables.hpp` | CCZ4 + 10 сеточных компонент материи `c_rho_p, c_S1..3, c_S11..33` (чётности как у ρ, S_i, S_ij) |
+| `ParticleMatterVars.hpp` | `class ParticleMatterVars : CCZ4Vars` — доступ к ρ, S_i, S_ij ячейки |
+| `ParticleMatter.hpp` | `matter_t` для `CCZ4RHSWithMatter`: `compute_emtensor` читает сеточные ρ, S_i, S_ij; `add_matter_rhs` = 0 |
+| `VlasovParticles.hpp/.cpp` | `amrex::ParticleContainer<NStructReal=4 (m, u_1, u_2, u_3)>`; `deposit(lev, MultiFab&)` через `amrex::ParticleToMesh` (CIC, веса m Γ/(√γ dV), m u_i/(√γ dV), m u_i u_j/(Γ √γ dV)); `push(lev, dt, state, deriv_state)` через `amrex::MeshToParticle` (CIC-интерполяция α, β^i, χ, h̃_ij и их ∂_i, предварительно посчитанных на сетке в отдельный MultiFab), интегратор RK2/KDK; `Redistribute()` после толчка |
+| `PBHVlasovLevel.hpp/.cpp` | `specific_post_init`: частицы из таблицы (FLRW/LTB), депозит; `specific_eval_rhs`: как ScalarField, но `CCZ4RHSWithMatter<ParticleMatter>`; `specific_advance`: толчок частиц + депозит для следующего шага; `specific_post_regrid`: `Redistribute` и депозит на новых уровнях; диагностика: ⟨K⟩, ρ_c, Ham/Mom, AH (ветка AHFinder) |
+| `Main_PBHVlasov.cpp`, `GNUmakefile`, `params.txt` | `USE_PARTICLES = TRUE`, `Src/Particle/Make.package` |
+
+Порядок: (1) скелет с нулём частиц компилируется и даёт вакуум/FLRW при ручном ρ; (2) депозит + FLRW-пыль
+(u_i = 0, равномерные частицы) — тест a(t), K(t); (3) толчок — тест: свободная частица в FLRW (u_i = const,
+dx/dt = α γ^{ij}u_j/Γ), затем LTB e = 0 при μ = 0.3 против 1D (таблица от 30.09).
+Депозит только на уровне частицы; на грубые уровни — `average_down`; сглаживание ядра: CIC на всех уровнях,
+при необходимости TSC. Число частиц: ≥ 8 на ячейку самого мелкого уровня в ядре (в 1D нужны были 32 оболочки
+на ячейку для сходимости релаксации пересечений — здесь 3D-аналог проверяется сходимостью по N_p).
