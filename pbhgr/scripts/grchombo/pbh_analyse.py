@@ -49,7 +49,14 @@ def main(run):
                 print(f"  first converged AH at t = {tAH:.2f} = {tAH/tC0:.4f} t_C(0) = {tAH/tH:.3f} t_H; row: " +
                       " ".join(f"{v:.5g}" for v in vals[i, :6]))
                 print(f"  last row: t = {(vals[-1,0]+t0)/tC0:.4f} t_C(0): " + " ".join(f"{v:.5g}" for v in vals[-1, :6]))
-                print(f"  (1D CMC reference for cold dust: first AH at 1.1203 t_C(0); M_H = {MH:.2f})")
+                # horizon growth: time at which M_AH (column 2 = mass) reaches given fractions of M_H
+                tt = vals[ok, 0] + t0; mm = vals[ok, 2] / MH
+                for thr in (0.03, 0.05, 0.1, 0.2, 0.3, 0.5):
+                    if mm.max() >= thr:
+                        j = np.argmax(mm >= thr)
+                        print(f"  M_AH = {thr} M_H reached at t = {tt[j]/tC0:.4f} t_C(0)")
+                print("  1D references (mu = 0.1, runs/v1/ref3d): cold M_AH = 0.1/0.3 M_H at 1.428/1.922 t_C(0); "
+                      "sigma_ent = 0.054: 1.548/1.959 t_C(0); first tiny AH 1.120/1.212")
 
 
 if __name__ == "__main__":
