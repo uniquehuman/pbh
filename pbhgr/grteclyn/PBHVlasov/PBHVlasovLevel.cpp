@@ -34,7 +34,7 @@ struct InitParams
     amrex::Real ah_guess{1.0}; // initial guess radius (coordinate)
     int ah_num_particles{2000};
     int ah_max_iter{2000};
-    int lattice_buffer{2};    // level-0 cells beyond a level's grids that still get that level's particle lattice
+    int lattice_buffer{4};    // level-l cells beyond a level's grids that still get that level's particle lattice
     void read()
     {
         GRParmParse pp("pbh_vlasov");

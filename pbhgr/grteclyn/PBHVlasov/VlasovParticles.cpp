@@ -95,58 +95,87 @@ struct MetricAtParticle
 };
 } // namespace
 
-int VlasovParticles::finest_level_covering(const amrex::IntVect &iv0) const
-{
-    int lev_cov = 0;
-    for (int lev = 1; lev <= this->finestLevel(); ++lev)
-    {
-        int ratio = 1;
-        for (int l = 0; l < lev; ++l)
-            ratio *= this->GetParGDB()->refRatio(l)[0];
-        // the level-0 cell iv0 grown by the buffer, refined to level lev
-        const amrex::IntVect lo = (iv0 - amrex::IntVect(m_lattice_buffer)) * ratio;
-        const amrex::IntVect hi = (iv0 + amrex::IntVect(m_lattice_buffer + 1)) * ratio - amrex::IntVect(1);
-        if (this->ParticleBoxArray(lev).intersects(amrex::Box(lo, hi)))
-            lev_cov = lev;
-    }
-    return lev_cov;
-}
-
 namespace
 {
-// lattice over level-0 cells; per level-0 cell the sub-lattice has n_per_dir * 2^lev_cov points per direction
+// Particle lattice built level by level in each level's own index space: n_per_dir^3 particles per level-l cell
+// inside the level-l grids grown by buffer_fine cells, excluding the (grown) region of level l+1.  Cells are
+// visited through the level-0 tiles owned by this rank (refined to level l), so creation is distributed;
+// the particles are added at level 0 and redistributed to their levels.
 template <class F>
-void make_lattice(VlasovParticles &pc, const amrex::Geometry &geom, int n_per_dir, F &&fill)
+void make_lattice(VlasovParticles &pc, const amrex::Geometry &geom0, int n_per_dir, int buffer_fine, F &&fill)
 {
     using ParticleType = VlasovParticles::ParticleType;
-    const auto dx = geom.CellSizeArray();
-    const auto plo = geom.ProbLoArray();
+    const int finest = pc.finestLevel();
+    const auto plo = geom0.ProbLoArray();
+    const auto dx0 = geom0.CellSizeArray();
+    // cumulative refinement ratio from level 0 to level l
+    std::vector<int> ratio(finest + 1, 1);
+    for (int l = 1; l <= finest; ++l)
+        ratio[l] = ratio[l - 1] * pc.GetParGDB()->refRatio(l - 1)[0];
+    // grown grids per level (level 0: the whole domain), and the region of each level = grown grids minus the
+    // grown grids of the next level (coarsened to this level)
+    std::vector<amrex::BoxArray> grown(finest + 1);
+    for (int l = 0; l <= finest; ++l)
+    {
+        if (l == 0)
+            grown[l] = amrex::BoxArray(geom0.Domain());
+        else
+        {
+            grown[l] = pc.ParticleBoxArray(l);
+            grown[l].grow(buffer_fine);
+            grown[l] = amrex::intersect(grown[l], amrex::refine(geom0.Domain(), ratio[l]));
+            grown[l].removeOverlap(); // grown boxes overlap each other: make the list disjoint
+        }
+    }
+    std::vector<amrex::BoxList> region(finest + 1);
+    for (int l = 0; l <= finest; ++l)
+    {
+        if (l == finest)
+            region[l] = grown[l].boxList();
+        else
+        {
+            amrex::BoxList next_bl = grown[l + 1].boxList();
+            next_bl.coarsen(pc.GetParGDB()->refRatio(l)[0]);
+            amrex::BoxArray next(next_bl); // plain array (coarsened lists cannot call removeOverlap)
+            next.removeOverlap();
+            for (int b = 0; b < grown[l].size(); ++b)
+                region[l].join(next.complementIn(grown[l][b]));
+        }
+    }
     for (amrex::MFIter mfi = pc.MakeMFIter(0); mfi.isValid(); ++mfi)
     {
-        const amrex::Box &box = mfi.tilebox();
-        auto &ptile = pc.GetParticles(0)[std::make_pair(mfi.index(), mfi.LocalTileIndex())];
+        const amrex::Box &tile0 = mfi.tilebox();
         amrex::Gpu::HostVector<ParticleType> host;
-        for (amrex::IntVect iv = box.smallEnd(); iv <= box.bigEnd(); box.next(iv))
+        for (int l = 0; l <= finest; ++l)
         {
-            const int lev = pc.finest_level_covering(iv);
-            const int n = n_per_dir * (1 << lev);
-            const amrex::Real dV_sub = dx[0] * dx[1] * dx[2] / (static_cast<amrex::Real>(n) * n * n);
-            for (int a = 0; a < n; ++a)
-                for (int b = 0; b < n; ++b)
-                    for (int c = 0; c < n; ++c)
-                    {
-                        ParticleType p;
-                        p.id() = ParticleType::NextID();
-                        p.cpu() = amrex::ParallelDescriptor::MyProc();
-                        p.pos(0) = plo[0] + (iv[0] + (a + 0.5) / n) * dx[0];
-                        p.pos(1) = plo[1] + (iv[1] + (b + 0.5) / n) * dx[1];
-                        p.pos(2) = plo[2] + (iv[2] + (c + 0.5) / n) * dx[2];
-                        for (int q = 0; q < VlasovIdx::NAOS; ++q)
-                            p.rdata(q) = 0.0;
-                        fill(p, dV_sub);
-                        host.push_back(p);
-                    }
+            const amrex::Box tile_l = amrex::refine(tile0, ratio[l]);
+            const int n = n_per_dir;
+            const amrex::Real dxl[3] = {dx0[0] / ratio[l], dx0[1] / ratio[l], dx0[2] / ratio[l]};
+            const amrex::Real dV_sub = dxl[0] * dxl[1] * dxl[2] / (static_cast<amrex::Real>(n) * n * n);
+            for (const amrex::Box &rb : region[l])
+            {
+                const amrex::Box cells = tile_l & rb;
+                if (cells.isEmpty())
+                    continue;
+                for (amrex::IntVect iv = cells.smallEnd(); iv <= cells.bigEnd(); cells.next(iv))
+                    for (int a = 0; a < n; ++a)
+                        for (int b = 0; b < n; ++b)
+                            for (int c = 0; c < n; ++c)
+                            {
+                                ParticleType p;
+                                p.id() = ParticleType::NextID();
+                                p.cpu() = amrex::ParallelDescriptor::MyProc();
+                                p.pos(0) = plo[0] + (iv[0] + (a + 0.5) / n) * dxl[0];
+                                p.pos(1) = plo[1] + (iv[1] + (b + 0.5) / n) * dxl[1];
+                                p.pos(2) = plo[2] + (iv[2] + (c + 0.5) / n) * dxl[2];
+                                for (int q = 0; q < VlasovIdx::NAOS; ++q)
+                                    p.rdata(q) = 0.0;
+                                fill(p, dV_sub);
+                                host.push_back(p);
+                            }
+            }
         }
+        auto &ptile = pc.GetParticles(0)[std::make_pair(mfi.index(), mfi.LocalTileIndex())];
         auto old_size = ptile.numParticles();
         ptile.resize(old_size + host.size());
         amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), ptile.GetArrayOfStructs().begin() + old_size);
@@ -157,7 +186,7 @@ void make_lattice(VlasovParticles &pc, const amrex::Geometry &geom, int n_per_di
 
 void VlasovParticles::init_uniform(const amrex::Geometry &geom, amrex::Real rho, int n_per_dir)
 {
-    make_lattice(*this, geom, n_per_dir, [=](ParticleType &p, amrex::Real dV_sub) {
+    make_lattice(*this, geom, n_per_dir, m_lattice_buffer, [=](ParticleType &p, amrex::Real dV_sub) {
         p.rdata(m) = rho * dV_sub;
         p.rdata(Gamma) = 1.0;
     });
@@ -177,7 +206,7 @@ void VlasovParticles::init_from_table(const amrex::Geometry &geom, const std::ve
         const amrex::Real t = s - i;
         return (1 - t) * tab[i] + t * tab[i + 1];
     };
-    make_lattice(*this, geom, n_per_dir, [&](ParticleType &p, amrex::Real dV_sub) {
+    make_lattice(*this, geom, n_per_dir, m_lattice_buffer, [&](ParticleType &p, amrex::Real dV_sub) {
         const amrex::Real X = p.pos(0) - cx, Y = p.pos(1) - cy, Z = p.pos(2) - cz;
         const amrex::Real r = std::sqrt(X * X + Y * Y + Z * Z);
         const amrex::Real rho = interp(rho_tab, r), chi = interp(chi_tab, r), ur = interp(ur_tab, r);

@@ -52,10 +52,8 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, Vlas
         this->resizeData();
     }
 
-    //! finest level whose grids (grown by m_lattice_buffer level-0 cells) cover level-0 cell iv0, so that the
-    //! level-l particle lattice extends a buffer beyond the level-l grids and the coarse–fine interface sees
-    //! particles of uniform mass (AMReX ghost/virtual particles then deposit smoothly)
-    int finest_level_covering(const amrex::IntVect &iv0) const;
+    //! lattice buffer: level-l particles extend this many level-l cells beyond the level-l grids, so that both
+    //! sides of a coarse–fine interface carry particles of the same mass
     void set_lattice_buffer(int n) { m_lattice_buffer = n; }
 
     //! uniform lattice created on level 0 over the whole domain with n_per_dir * 2^l particles per direction in
@@ -89,7 +87,7 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, Vlas
     }
 
   private:
-    int m_lattice_buffer{2};
+    int m_lattice_buffer{4};
     bool m_verbose_deposit{false};
     bool m_dep_ghosts{true}, m_dep_fine_to_coarse{false}, m_dep_virtuals{true};
 };
