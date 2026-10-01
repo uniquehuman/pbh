@@ -255,6 +255,9 @@ pbh_vlasov.ah_start = {max(0.0, a.ah_start * tC0 - t0):.4f}
 pbh_vlasov.ah_guess = {0.1 * rm_phys:.4f}
 pbh_vlasov.ah_num_particles = 2000
 pbh_vlasov.ah_max_iter = 3000
+# AMReX TimeIntegrator used by the AH finder flow (required parameters)
+integration.type = RungeKutta
+integration.rk.type = 4
 ah_finder.eta = 3.0
 ah_finder.c = 1.0
 ah_finder.tolerance = 1e-4
