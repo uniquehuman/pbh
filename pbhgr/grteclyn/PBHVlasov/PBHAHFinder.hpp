@@ -140,6 +140,8 @@ class PBHAHFinder : public ParticleInterpolator<num_components>
     void find();
     // PBHVlasov additions
     void set_max_iter(int n) { m_max_iter = n; }
+    //! abandon the flow when the surface radius leaves [hmin, hmax] (no horizon: the surface runs away)
+    void set_h_bounds(double hmin, double hmax) { m_h_min = hmin; m_h_max = hmax; }
     [[nodiscard]] bool converged() const { return m_converged; }
     [[nodiscard]] double area() const { return m_area; }
     [[nodiscard]] double mass() const { return std::sqrt(m_area / (16.0 * M_PI)); }
@@ -149,6 +151,7 @@ class PBHAHFinder : public ParticleInterpolator<num_components>
 
   private:
     int m_max_iter{2000};
+    double m_h_min{0.0}, m_h_max{1e300};
     bool m_converged{false};
     double m_area{0.0}, m_theta_final{0.0};
     int m_iterations{0};

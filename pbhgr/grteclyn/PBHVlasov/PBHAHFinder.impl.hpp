@@ -104,6 +104,19 @@ template <int num_components> void PBHAHFinder<num_components>::find()
         m_integrator->set_time_step(dt);
         m_integrator->advance(m_state, new_state, n_iter * dt, dt);
         std::swap(m_state, new_state);
+        // runaway guard: without a horizon the surface drifts out of the domain (interpolation would abort)
+        {
+            double hmin = 1e300, hmax = -1e300;
+            for (double hv : m_state.h) { hmin = std::min(hmin, hv); hmax = std::max(hmax, hv); }
+            if (!(hmin >= m_h_min && hmax <= m_h_max))
+            {
+                amrex::Print() << " PBHAHFinder: surface left [" << m_h_min << ", " << m_h_max << "] (h in [" << hmin
+                               << ", " << hmax << "]) after " << n_iter + 1 << " iterations: no horizon\n";
+                m_converged = false; m_theta_final = theta_old; m_iterations = n_iter + 1; m_area = 0.0;
+                if (io_proc) { theta_log.close(); dt_log.close(); }
+                return;
+            }
+        }
 
         // Evaluate Theta at the new state
         this->set_particle_positions(m_state.h);

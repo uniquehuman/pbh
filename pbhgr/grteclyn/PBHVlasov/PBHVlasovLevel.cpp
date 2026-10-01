@@ -328,6 +328,7 @@ void PBHVlasovLevel::specific_post_timestep()
         const double guess = (amr->ah_last_radius > 0.0) ? 1.3 * amr->ah_last_radius : ip.ah_guess;
         PBHAHFinder<21> finder(ip.ah_num_particles, center, guess);
         finder.set_max_iter(ip.ah_max_iter);
+        finder.set_h_bounds(0.5 * Geom().CellSize(0) / (1 << amr->finestLevel()), 0.4 * (phi[0] - plo[0]));
         finder.init(amr);
         finder.find();
         if (amrex::ParallelDescriptor::IOProcessor())
