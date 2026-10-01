@@ -133,7 +133,7 @@ def main():
     ap.add_argument("--r_max", type=float, default=8.0, help="table extent in r_m (comoving)")
     ap.add_argument("--ah", type=int, default=1)
     ap.add_argument("--ah_start", type=float, default=0.5, help="AH search from t_0 + ah_start * t_C(0)")
-    ap.add_argument("--plot_every", type=float, default=0.02, help="plot interval in t_C(0)")
+    ap.add_argument("--plot_every", type=float, default=0.05, help="plot interval in t_C(0)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
