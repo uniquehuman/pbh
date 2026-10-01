@@ -243,130 +243,33 @@ struct DepositCIC
                               });
     }
 };
-} // namespace
 
-void VlasovParticles::deposit_all(const amrex::Vector<amrex::MultiFab *> &a_states,
-                                  const amrex::Vector<amrex::Geometry> &a_geoms)
+// fill the deposit slots of the particles of one level from (m, u_i, Gamma)
+void fill_deposit_slots(VlasovParticles &pc, int lev)
 {
-    const int finest = this->finestLevel();
-    // 1) fill the deposit slots from (m, u_i, Gamma): dep0 = m Gamma, dep_k = w_k / (m Gamma)
-    for (int lev = 0; lev <= finest; ++lev)
-        for (PC::ParIterType pti(*this, lev); pti.isValid(); ++pti)
-        {
-            auto ptd = pti.GetParticleTile().getParticleTileData();
-            const int np = pti.numParticles();
-            amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int ip) {
-                auto &p = ptd.m_aos[ip];
-                const amrex::Real mm = p.rdata(m), G = p.rdata(Gamma);
-                const amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
-                p.rdata(dep0) = mm * G;
-                for (int i = 0; i < 3; ++i)
-                    p.rdata(dep0 + 1 + i) = u[i] / G;
-                static constexpr int ii[6] = {0, 0, 0, 1, 1, 2}, jj[6] = {0, 1, 2, 1, 2, 2};
-                for (int s = 0; s < 6; ++s)
-                    p.rdata(dep0 + 4 + s) = u[ii[s]] * u[jj[s]] / (G * G);
-            });
-        }
-    amrex::Gpu::streamSynchronize();
-    // 2) level-by-level CIC sums with consistent coarse-fine interfaces:
-    //    own particles (clouds also into the 2 ghost cells) + ghost copies of the coarser level's particles near
-    //    the level's grids (their inward clouds); the outward clouds of the fine particles are added to the coarse
-    //    level (sum_fine_to_coarse); covered coarse cells are finally replaced by the fine average.
-    amrex::Vector<std::unique_ptr<amrex::MultiFab>> dep(finest + 1);
-    for (int lev = 0; lev <= finest; ++lev)
+    using PC = VlasovParticles::PC;
+    for (PC::ParIterType pti(pc, lev); pti.isValid(); ++pti)
     {
-        // 3 ghost cells: ghost particles may sit 2 cells outside the grids and their CIC clouds reach one more
-        dep[lev] = std::make_unique<amrex::MultiFab>(this->ParticleBoxArray(lev), this->ParticleDistributionMap(lev),
-                                                     NDEP, 3);
-        const DepositCIC<PC> f{a_geoms[lev].ProbLoArray(), a_geoms[lev].InvCellSizeArray()};
-        if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " own particles\n";
-        amrex::ParticleToMesh(*this, *dep[lev], lev, f, true);
-        if (lev > 0)
-        {
-            VlasovParticles ghosts;
-            ghosts.Define(this->GetParGDB());
-            ghosts.reserveData();
-            ghosts.resizeData();
-            PC::ParticleTileType ghost_tile; // tile version keeps the SoA components consistent
-            if (m_dep_ghosts) {
-            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " create ghosts\n";
-            this->CreateGhostParticles(lev - 1, 1, ghost_tile);     // level-(lev-1) particles within 1 coarse cell
-            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " add " << ghost_tile.numParticles() << " ghosts (rank 0)\n";
-            ghosts.AddParticlesAtLevel(ghost_tile, lev, 2);         // kept within 2 fine cells of the level-lev grids
-            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " ghost deposit\n";
-            amrex::ParticleToMesh(ghosts, *dep[lev], lev, f, false);
-            }
-            if (m_dep_fine_to_coarse) {
-            if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " sum_fine_to_coarse\n";
-            amrex::sum_fine_to_coarse(*dep[lev], *dep[lev - 1], 0, NDEP, this->GetParGDB()->refRatio(lev - 1),
-                                      a_geoms[lev - 1], a_geoms[lev]);
-            }
-            if (m_dep_virtuals)
-            {
-                // copies of the level-lev particles near the boundary of the level-lev grids, deposited on level
-                // lev-1 with the coarse kernel: the coarse cells just outside the fine grids then see the same
-                // clouds as they would from level-(lev-1) particles (covered coarse cells are replaced by the
-                // fine average below)
-                if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " virtual copies to level " << lev - 1 << "\n";
-                const amrex::BoxArray &ba = this->ParticleBoxArray(lev);
-                const auto plo = a_geoms[lev].ProbLoArray();
-                const auto dxi = a_geoms[lev].InvCellSizeArray();
-                const int margin = 2 * this->GetParGDB()->refRatio(lev - 1)[0]; // one coarse CIC cloud, in fine cells
-                PC::ParticleTileType copies;
-                amrex::Gpu::HostVector<ParticleType> host;
-                for (PC::ParIterType pti(*this, lev); pti.isValid(); ++pti)
-                {
-                    const auto &aos = pti.GetArrayOfStructs();
-                    for (const auto &p : aos)
-                    {
-                        const amrex::IntVect iv(static_cast<int>(std::floor((p.pos(0) - plo[0]) * dxi[0])),
-                                                static_cast<int>(std::floor((p.pos(1) - plo[1]) * dxi[1])),
-                                                static_cast<int>(std::floor((p.pos(2) - plo[2]) * dxi[2])));
-                        const amrex::Box nb(iv - amrex::IntVect(margin), iv + amrex::IntVect(margin));
-                        if (!ba.contains(nb)) // within 'margin' fine cells of the level's outer boundary
-                            host.push_back(p);
-                    }
-                }
-                copies.resize(host.size());
-                amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), copies.GetArrayOfStructs().begin());
-                VlasovParticles virt;
-                virt.Define(this->GetParGDB());
-                virt.reserveData();
-                virt.resizeData();
-                virt.AddParticlesAtLevel(copies, lev - 1, 0);
-                const DepositCIC<PC> fc{a_geoms[lev - 1].ProbLoArray(), a_geoms[lev - 1].InvCellSizeArray()};
-                amrex::ParticleToMesh(virt, *dep[lev - 1], lev - 1, fc, false);
-            }
-        }
-    }
-    if (m_verbose_deposit) amrex::Print() << "  deposit: average_down\n";
-    for (int lev = finest; lev >= 1; --lev)
-        amrex::average_down(*dep[lev], *dep[lev - 1], 0, NDEP, this->GetParGDB()->refRatio(lev - 1));
-    if (m_verbose_deposit) amrex::Print() << "  deposit: done\n";
-    // 3) divide by sqrt(gamma) dV and copy into the states (interior cells)
-    for (int lev = 0; lev <= finest; ++lev)
-    {
-        const auto dx = a_geoms[lev].CellSizeArray();
-        const amrex::Real dV = dx[0] * dx[1] * dx[2];
-        amrex::MultiFab &st = *a_states[lev];
-        amrex::MultiFab dep_on_state(st.boxArray(), st.DistributionMap(), NDEP, 0);
-        dep_on_state.ParallelCopy(*dep[lev], 0, 0, NDEP);
-        const auto &dep_arrays = dep_on_state.const_arrays();
-        const auto &st_arrays = st.arrays();
-        amrex::ParallelFor(st, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
-            const amrex::Real chi = st_arrays[box_no](ix, iy, iz, c_chi);
-            const amrex::Real inv = std::pow(chi, 1.5) / dV; // 1/(sqrt(gamma) dV)
-            for (int c = 0; c < NDEP; ++c)
-                st_arrays[box_no](ix, iy, iz, c_rho_p + c) = dep_arrays[box_no](ix, iy, iz, c) * inv;
+        auto ptd = pti.GetParticleTile().getParticleTileData();
+        const int np = pti.numParticles();
+        amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int ip) {
+            auto &p = ptd.m_aos[ip];
+            const amrex::Real mm = p.rdata(m), G = p.rdata(Gamma);
+            const amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
+            p.rdata(dep0) = mm * G;
+            for (int i = 0; i < 3; ++i)
+                p.rdata(dep0 + 1 + i) = u[i] / G;
+            static constexpr int ii[6] = {0, 0, 0, 1, 1, 2}, jj[6] = {0, 1, 2, 1, 2, 2};
+            for (int s = 0; s < 6; ++s)
+                p.rdata(dep0 + 4 + s) = u[ii[s]] * u[jj[s]] / (G * G);
         });
-        amrex::Gpu::streamSynchronize();
     }
+    amrex::Gpu::streamSynchronize();
 }
 
-void VlasovParticles::interpolate_fields(int lev, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom)
+// metric fields and first derivatives on a level: NFLD components, 1 ghost cell, from a state with >= 3 ghosts
+void metric_fields(const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom, amrex::MultiFab &fld)
 {
-    // fields MultiFab: value and 3 derivatives of lapse, shift(3), chi, h~(6): 44 components, 1 ghost cell
-    amrex::MultiFab fld(a_state_gh.boxArray(), a_state_gh.DistributionMap(), NFLD, 1);
     const int comps[NMET] = {c_lapse, c_shift1, c_shift2, c_shift3, c_chi, c_h11, c_h12, c_h13, c_h22, c_h23, c_h33};
     const auto dx = geom.CellSizeArray();
     const auto &st = a_state_gh.const_arrays();
@@ -380,7 +283,6 @@ void VlasovParticles::interpolate_fields(int lev, const amrex::MultiFab &a_state
         {
             const int c = comp_arr[f];
             fa[box_no](ix, iy, iz, 4 * f) = s(ix, iy, iz, c);
-            // fourth-order centred first derivatives
             fa[box_no](ix, iy, iz, 4 * f + 1) =
                 (s(ix - 2, iy, iz, c) - 8 * s(ix - 1, iy, iz, c) + 8 * s(ix + 1, iy, iz, c) - s(ix + 2, iy, iz, c)) / (12 * dx[0]);
             fa[box_no](ix, iy, iz, 4 * f + 2) =
@@ -390,27 +292,125 @@ void VlasovParticles::interpolate_fields(int lev, const amrex::MultiFab &a_state
         }
     });
     amrex::Gpu::streamSynchronize();
+}
+
+// linear interpolation of the NFLD fields to a particle position
+template <class P>
+AMREX_GPU_DEVICE void interp_fields_at(const P &p, amrex::Array4<const amrex::Real> const &arr,
+                                       const amrex::GpuArray<amrex::Real, 3> &plo,
+                                       const amrex::GpuArray<amrex::Real, 3> &dxi, amrex::Real *f)
+{
+    amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+    for (int c = 0; c < NFLD; ++c)
+        f[c] = 0.0;
+    interp.MeshToParticle(
+        p, arr, 0, 0, NFLD,
+        [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &a, int i, int j, int k, int comp) {
+            return a(i, j, k, comp);
+        },
+        [=] AMREX_GPU_DEVICE(const P & /*part*/, int comp, amrex::Real val) { f[comp] += val; });
+}
+} // namespace
+
+void VlasovParticles::deposit_level(int lev, const amrex::Vector<amrex::MultiFab *> &a_states,
+                                    const amrex::Vector<amrex::Geometry> &a_geoms)
+{
+    const int finest = this->finestLevel();
+    fill_deposit_slots(*this, lev);
+    if (lev > 0)
+        fill_deposit_slots(*this, lev - 1);
+    if (lev < finest)
+        fill_deposit_slots(*this, lev + 1);
+    // 3 ghost cells: ghost particles may sit 2 cells outside the grids and their CIC clouds reach one more
+    amrex::MultiFab dep(this->ParticleBoxArray(lev), this->ParticleDistributionMap(lev), NDEP, 3);
+    const DepositCIC<PC> f{a_geoms[lev].ProbLoArray(), a_geoms[lev].InvCellSizeArray()};
+    if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " own particles\n";
+    amrex::ParticleToMesh(*this, dep, lev, f, true);
+    if (lev > 0 && m_dep_ghosts)
+    {
+        // coarse (lev-1) particles within 1 coarse cell of the level-lev grids: their inward clouds
+        VlasovParticles ghosts;
+        ghosts.Define(this->GetParGDB());
+        ghosts.reserveData();
+        ghosts.resizeData();
+        PC::ParticleTileType ghost_tile;
+        this->CreateGhostParticles(lev - 1, 1, ghost_tile);
+        if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " ghosts " << ghost_tile.numParticles() << " (rank 0)\n";
+        ghosts.AddParticlesAtLevel(ghost_tile, lev, 2);
+        amrex::ParticleToMesh(ghosts, dep, lev, f, false);
+    }
+    if (lev < finest && m_dep_virtuals)
+    {
+        // copies of the level-(lev+1) particles near the boundary of the fine grids, deposited here with this
+        // level's kernel: the cells just outside the fine grids see the same clouds as from own particles
+        const int lf = lev + 1;
+        const amrex::BoxArray &ba = this->ParticleBoxArray(lf);
+        const auto plo = a_geoms[lf].ProbLoArray();
+        const auto dxi = a_geoms[lf].InvCellSizeArray();
+        const int margin = 2 * this->GetParGDB()->refRatio(lev)[0]; // one coarse CIC cloud, in fine cells
+        amrex::Gpu::HostVector<ParticleType> host;
+        for (PC::ParIterType pti(*this, lf); pti.isValid(); ++pti)
+        {
+            const auto &aos = pti.GetArrayOfStructs();
+            for (const auto &p : aos)
+            {
+                const amrex::IntVect iv(static_cast<int>(std::floor((p.pos(0) - plo[0]) * dxi[0])),
+                                        static_cast<int>(std::floor((p.pos(1) - plo[1]) * dxi[1])),
+                                        static_cast<int>(std::floor((p.pos(2) - plo[2]) * dxi[2])));
+                const amrex::Box nb(iv - amrex::IntVect(margin), iv + amrex::IntVect(margin));
+                if (!ba.contains(nb))
+                    host.push_back(p);
+            }
+        }
+        if (m_verbose_deposit) amrex::Print() << "  deposit: level " << lev << " virtual copies from level " << lf << ": " << host.size() << " (rank 0)\n";
+        PC::ParticleTileType copies;
+        copies.resize(host.size());
+        amrex::Gpu::copy(amrex::Gpu::hostToDevice, host.begin(), host.end(), copies.GetArrayOfStructs().begin());
+        VlasovParticles virt;
+        virt.Define(this->GetParGDB());
+        virt.reserveData();
+        virt.resizeData();
+        virt.AddParticlesAtLevel(copies, lev, 0);
+        amrex::ParticleToMesh(virt, dep, lev, f, false);
+    }
+    // divide by sqrt(gamma) dV and copy into the state (interior cells)
+    const auto dx = a_geoms[lev].CellSizeArray();
+    const amrex::Real dV = dx[0] * dx[1] * dx[2];
+    amrex::MultiFab &st = *a_states[lev];
+    amrex::MultiFab dep_on_state(st.boxArray(), st.DistributionMap(), NDEP, 0);
+    dep_on_state.ParallelCopy(dep, 0, 0, NDEP);
+    const auto &dep_arrays = dep_on_state.const_arrays();
+    const auto &st_arrays = st.arrays();
+    amrex::ParallelFor(st, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
+        const amrex::Real chi = st_arrays[box_no](ix, iy, iz, c_chi);
+        const amrex::Real inv = std::pow(chi, 1.5) / dV; // 1/(sqrt(gamma) dV)
+        for (int c = 0; c < NDEP; ++c)
+            st_arrays[box_no](ix, iy, iz, c_rho_p + c) = dep_arrays[box_no](ix, iy, iz, c) * inv;
+    });
+    amrex::Gpu::streamSynchronize();
+}
+
+void VlasovParticles::deposit_all(const amrex::Vector<amrex::MultiFab *> &a_states,
+                                  const amrex::Vector<amrex::Geometry> &a_geoms)
+{
+    const int finest = this->finestLevel();
+    for (int lev = 0; lev <= finest; ++lev)
+        deposit_level(lev, a_states, a_geoms);
+    for (int lev = finest; lev >= 1; --lev)
+        amrex::average_down(*a_states[lev], *a_states[lev - 1], a_geoms[lev], a_geoms[lev - 1], c_rho_p, NDEP,
+                            this->GetParGDB()->refRatio(lev - 1));
+}
+
+void VlasovParticles::update_gamma(int lev, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom)
+{
+    amrex::MultiFab fld(a_state_gh.boxArray(), a_state_gh.DistributionMap(), NFLD, 1);
+    metric_fields(a_state_gh, geom, fld);
     const auto plo = geom.ProbLoArray();
     const auto dxi = geom.InvCellSizeArray();
     amrex::MeshToParticle(*this, fld, lev,
-                          [=] AMREX_GPU_DEVICE(const PC::ParticleTileType::ParticleTileDataType &ptd, int ip,
-                                               amrex::Array4<const amrex::Real> const &arr)
-                          {
-                              auto &p = ptd.m_aos[ip];
-                              amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
-                              for (int c = 0; c < NFLD; ++c)
-                                  ptd.m_rdata[c][ip] = 0.0;
-                              interp.MeshToParticle(
-                                  p, arr, 0, 0, NFLD,
-                                  [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &a, int i, int j, int k,
-                                                       int comp) { return a(i, j, k, comp); },
-                                  [=] AMREX_GPU_DEVICE(ParticleType & /*part*/, int comp, amrex::Real val) {
-                                      ptd.m_rdata[comp][ip] += val;
-                                  });
-                              // update Gamma from the interpolated metric
+                          [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
                               amrex::Real f[NFLD];
-                              for (int c = 0; c < NFLD; ++c)
-                                  f[c] = ptd.m_rdata[c][ip];
+                              interp_fields_at(p, arr, plo, dxi, f);
                               const MetricAtParticle M = MetricAtParticle::from(f);
                               const amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
                               p.rdata(Gamma) = M.Gamma(u);
@@ -420,52 +420,44 @@ void VlasovParticles::interpolate_fields(int lev, const amrex::MultiFab &a_state
 
 void VlasovParticles::push(int lev, amrex::Real dt, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom)
 {
-    // stage 1: k1 at (x^n, u^n); move to the midpoint
-    interpolate_fields(lev, a_state_gh, geom);
-    for (PC::ParIterType pti(*this, lev); pti.isValid(); ++pti)
-    {
-        auto ptd = pti.GetParticleTile().getParticleTileData();
-        const int np = pti.numParticles();
-        amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int ip) {
-            auto &p = ptd.m_aos[ip];
-            amrex::Real f[NFLD];
-            for (int c = 0; c < NFLD; ++c)
-                f[c] = ptd.m_rdata[c][ip];
-            const MetricAtParticle M = MetricAtParticle::from(f);
-            amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)}, kx[3], ku[3];
-            M.rhs(u, kx, ku);
-            p.rdata(px0) = p.pos(0); p.rdata(py0) = p.pos(1); p.rdata(pz0) = p.pos(2);
-            p.rdata(u01) = u[0]; p.rdata(u02) = u[1]; p.rdata(u03) = u[2];
-            for (int i = 0; i < 3; ++i)
-                p.pos(i) += 0.5 * dt * kx[i];
-            p.rdata(u1) = u[0] + 0.5 * dt * ku[0];
-            p.rdata(u2) = u[1] + 0.5 * dt * ku[1];
-            p.rdata(u3) = u[2] + 0.5 * dt * ku[2];
-        });
-    }
+    amrex::MultiFab fld(a_state_gh.boxArray(), a_state_gh.DistributionMap(), NFLD, 1);
+    metric_fields(a_state_gh, geom, fld);
+    const auto plo = geom.ProbLoArray();
+    const auto dxi = geom.InvCellSizeArray();
+    // stage 1: k1 at (x^n, u^n); move to the midpoint (particles stay within their box's ghost region)
+    amrex::MeshToParticle(*this, fld, lev,
+                          [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
+                              amrex::Real f[NFLD];
+                              interp_fields_at(p, arr, plo, dxi, f);
+                              const MetricAtParticle M = MetricAtParticle::from(f);
+                              amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)}, kx[3], ku[3];
+                              M.rhs(u, kx, ku);
+                              p.rdata(px0) = p.pos(0); p.rdata(py0) = p.pos(1); p.rdata(pz0) = p.pos(2);
+                              p.rdata(u01) = u[0]; p.rdata(u02) = u[1]; p.rdata(u03) = u[2];
+                              for (int i = 0; i < 3; ++i)
+                                  p.pos(i) += 0.5 * dt * kx[i];
+                              p.rdata(u1) = u[0] + 0.5 * dt * ku[0];
+                              p.rdata(u2) = u[1] + 0.5 * dt * ku[1];
+                              p.rdata(u3) = u[2] + 0.5 * dt * ku[2];
+                          });
     amrex::Gpu::streamSynchronize();
-    // stage 2: k2 at the midpoint, full step from the saved state
-    interpolate_fields(lev, a_state_gh, geom);
-    for (PC::ParIterType pti(*this, lev); pti.isValid(); ++pti)
-    {
-        auto ptd = pti.GetParticleTile().getParticleTileData();
-        const int np = pti.numParticles();
-        amrex::ParallelFor(np, [=] AMREX_GPU_DEVICE(int ip) {
-            auto &p = ptd.m_aos[ip];
-            amrex::Real f[NFLD];
-            for (int c = 0; c < NFLD; ++c)
-                f[c] = ptd.m_rdata[c][ip];
-            const MetricAtParticle M = MetricAtParticle::from(f);
-            amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)}, kx[3], ku[3];
-            M.rhs(u, kx, ku);
-            p.pos(0) = p.rdata(px0) + dt * kx[0];
-            p.pos(1) = p.rdata(py0) + dt * kx[1];
-            p.pos(2) = p.rdata(pz0) + dt * kx[2];
-            p.rdata(u1) = p.rdata(u01) + dt * ku[0];
-            p.rdata(u2) = p.rdata(u02) + dt * ku[1];
-            p.rdata(u3) = p.rdata(u03) + dt * ku[2];
-        });
-    }
+    // stage 2: k2 at the midpoint, full step from the saved state; Gamma at the new state
+    amrex::MeshToParticle(*this, fld, lev,
+                          [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
+                              amrex::Real f[NFLD];
+                              interp_fields_at(p, arr, plo, dxi, f);
+                              const MetricAtParticle M = MetricAtParticle::from(f);
+                              amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)}, kx[3], ku[3];
+                              M.rhs(u, kx, ku);
+                              p.pos(0) = p.rdata(px0) + dt * kx[0];
+                              p.pos(1) = p.rdata(py0) + dt * kx[1];
+                              p.pos(2) = p.rdata(pz0) + dt * kx[2];
+                              p.rdata(u1) = p.rdata(u01) + dt * ku[0];
+                              p.rdata(u2) = p.rdata(u02) + dt * ku[1];
+                              p.rdata(u3) = p.rdata(u03) + dt * ku[2];
+                              const amrex::Real un[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
+                              p.rdata(Gamma) = M.Gamma(un);
+                          });
     amrex::Gpu::streamSynchronize();
     Redistribute();
 }

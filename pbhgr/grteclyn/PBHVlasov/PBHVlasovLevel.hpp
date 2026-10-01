@@ -24,6 +24,8 @@ class PBHVlasovLevel : public GRAmrLevel
     void specific_update_ode(amrex::MultiFab &a_soln) override;
     void specific_post_timestep() override;
     void specific_post_regrid(int a_lbase, int a_new_finest) override;
+    void specific_post_checkpoint(const std::string &a_dir, std::ostream &os) override;
+    void specific_post_restart() override;
     void tag_cells(amrex::TagBoxArray &a_tag_box_array, amrex::Real a_regrid_threshold) final;
 
   private:

@@ -203,11 +203,7 @@ void PBHVlasovLevel::specific_post_init()
 
 void PBHVlasovLevel::deposit_particles()
 {
-    // with subcycling each level would deposit its own particles after its push; the multilevel deposit
-    // (consistent interfaces) is done for all levels at once from the finest level's step
-    auto *amr = get_vlasov_amr_ptr();
-    if (Level() == amr->finestLevel())
-        amr->deposit_all_levels(state_index);
+    get_vlasov_amr_ptr()->deposit_one_level(Level(), state_index);
 }
 
 void PBHVlasovLevel::specific_advance()
@@ -342,6 +338,29 @@ void PBHVlasovLevel::specific_post_timestep()
                 << finder.mean_radius() << " " << finder.iterations() << " " << finder.theta_norm() << "\n";
         }
         amr->ah_last_radius = finder.converged() ? finder.mean_radius() : -1.0;
+    }
+}
+
+void PBHVlasovLevel::specific_post_checkpoint(const std::string &a_dir, std::ostream & /*os*/)
+{
+    if (Level() == 0 && get_vlasov_amr_ptr()->particles_ready)
+        get_vlasov_amr_ptr()->particles.write_checkpoint(a_dir);
+}
+
+void PBHVlasovLevel::specific_post_restart()
+{
+    auto *amr = get_vlasov_amr_ptr();
+    if (Level() == 0)
+    {
+        amr->particles.setup(amr);
+        amr->particles.read_checkpoint(amr->theRestartFile());
+        amr->particles_ready = true;
+        amrex::Print() << "PBHVlasov: restarted " << amr->particles.TotalNumberOfParticles() << " particles\n";
+    }
+    if (Level() == amr->finestLevel())
+    {
+        amr->deposit_all_levels(state_index);
+        amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K);
     }
 }
 

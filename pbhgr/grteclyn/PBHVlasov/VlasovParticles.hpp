@@ -32,16 +32,17 @@ enum
     m = 10, u1, u2, u3, px0, py0, pz0, u01, u02, u03, Gamma, NAOS
 };
 constexpr int NDEP = 10;
-// interpolated field layout (SoA): value then d/dx, d/dy, d/dz for each of the 11 metric fields
+// interpolated field layout (per-particle local array inside the push): value then d/dx, d/dy, d/dz for each of
+// the 11 metric fields
 constexpr int NMET = 11;      // lapse, shift1..3, chi, h11 h12 h13 h22 h23 h33
 constexpr int NFLD = 4 * NMET; // 44
 constexpr int f_lapse = 0, f_shift = 1, f_chi = 4, f_h = 5;
 } // namespace VlasovIdx
 
-class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, VlasovIdx::NFLD, 0>
+class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0>
 {
   public:
-    using PC = amrex::ParticleContainer<VlasovIdx::NAOS, 0, VlasovIdx::NFLD, 0>;
+    using PC = amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0>;
     using ParticleType = PC::ParticleType;
 
     VlasovParticles() = default;
@@ -67,15 +68,24 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, Vlas
                          const std::vector<amrex::Real> &rho_tab, const std::vector<amrex::Real> &ur_tab,
                          const std::vector<amrex::Real> &chi_tab, int n_per_dir);
 
-    //! multilevel deposit (AMReX AssignDensity: consistent coarse–fine interfaces) of rho_p, S_i, S_ij into the
-    //! matter components of the states of all levels; a_states[lev] and a_geoms[lev] for lev = 0..finest
+    //! deposit rho_p, S_i, S_ij on level lev (own particles + ghost copies of level lev-1 particles near the grids
+    //! + copies of level lev+1 particles near their boundary, so that coarse-fine interfaces are consistent) into
+    //! the matter components of a_states[lev]; a_states/a_geoms indexed by level
+    void deposit_level(int lev, const amrex::Vector<amrex::MultiFab *> &a_states, const amrex::Vector<amrex::Geometry> &a_geoms);
+
+    //! deposit every level and average the covered coarse cells down (initialisation / regrid)
     void deposit_all(const amrex::Vector<amrex::MultiFab *> &a_states, const amrex::Vector<amrex::Geometry> &a_geoms);
 
-    //! interpolate lapse, shift, chi, h~ and their first derivatives from a ghost-filled state
-    void interpolate_fields(int lev, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom);
-
-    //! midpoint RK2 push by dt using the interpolated fields (calls interpolate_fields twice)
+    //! midpoint RK2 push of the level-lev particles by dt; fields and first derivatives are interpolated
+    //! linearly from a ghost-filled state inside the push (no per-particle storage)
     void push(int lev, amrex::Real dt, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom);
+
+    //! update Gamma of the level-lev particles from the current metric (needed before a deposit after a regrid)
+    void update_gamma(int lev, const amrex::MultiFab &a_state_gh, const amrex::Geometry &geom);
+
+    //! checkpoint / restart of the particle data (AMReX binary format in the checkpoint directory)
+    void write_checkpoint(const std::string &a_dir) const { this->Checkpoint(a_dir, "vlasov_particles"); }
+    void read_checkpoint(const std::string &a_dir) { this->Restart(a_dir, "vlasov_particles"); }
 
     //! total rest mass over all levels (diagnostics)
     amrex::Real total_mass(int lev);

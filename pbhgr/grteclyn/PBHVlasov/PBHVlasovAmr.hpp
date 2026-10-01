@@ -12,18 +12,24 @@ class PBHVlasovAmr : public GRAmr
   public:
     VlasovParticles particles;
     bool particles_ready{false};
-    //! deposit the particles of every level and average the sources down to the coarser levels
-    void deposit_all_levels(int state_index)
+    amrex::Vector<amrex::MultiFab *> states(int state_index)
     {
-        amrex::Vector<amrex::MultiFab *> states;
-        amrex::Vector<amrex::Geometry> geoms;
+        amrex::Vector<amrex::MultiFab *> v;
         for (int lev = 0; lev <= finestLevel(); ++lev)
-        {
-            states.push_back(&getLevel(lev).get_new_data(state_index));
-            geoms.push_back(getLevel(lev).Geom());
-        }
-        particles.deposit_all(states, geoms);
+            v.push_back(&getLevel(lev).get_new_data(state_index));
+        return v;
     }
+    amrex::Vector<amrex::Geometry> geoms()
+    {
+        amrex::Vector<amrex::Geometry> v;
+        for (int lev = 0; lev <= finestLevel(); ++lev)
+            v.push_back(getLevel(lev).Geom());
+        return v;
+    }
+    //! deposit every level (initialisation / regrid) with the covered coarse cells averaged down
+    void deposit_all_levels(int state_index) { particles.deposit_all(states(state_index), geoms()); }
+    //! deposit one level (after its particle push)
+    void deposit_one_level(int lev, int state_index) { particles.deposit_level(lev, states(state_index), geoms()); }
     // last apparent-horizon result (for the guess radius of the next search)
     double ah_last_radius{-1.0};
     void average_down_sources(int state_index)
