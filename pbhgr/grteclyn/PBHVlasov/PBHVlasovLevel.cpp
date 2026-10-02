@@ -1,5 +1,6 @@
 /* PBHVlasov example for GRTeclyn (pbhgr project, stage 2). Based on Examples/ScalarField (GRTeclyn fd76177). */
 #include "PBHVlasovLevel.hpp"
+#include <filesystem>
 #include "AlgebraicConstraintsEnforcer.hpp"
 #include "CCZ4RHSWithMatter.hpp"
 #include "ConstraintsWithMatter.hpp"
@@ -35,6 +36,11 @@ struct InitParams
     int ah_num_particles{2000};
     int ah_max_iter{2000};
     int lattice_buffer{4};    // level-l cells beyond a level's grids that still get that level's particle lattice
+    amrex::Real max_disp_cells{0.8}; // cap on the particle displacement per push (cells)
+    int theta_rays{1};        // spherical-expansion diagnostic along the 6 coordinate rays every coarse step
+    int theta_ray_n{256};     // points per ray
+    amrex::Real theta_ray_dr{0.5}; // spacing in finest-level cells
+    int theta_profile_interval{20}; // coarse steps between full Theta(r) profile dumps (0 = never)
     void read()
     {
         GRParmParse pp("pbh_vlasov");
@@ -48,8 +54,132 @@ struct InitParams
         pp.query("ah_num_particles", ah_num_particles);
         pp.query("ah_max_iter", ah_max_iter);
         pp.query("lattice_buffer", lattice_buffer);
+        pp.query("max_disp_cells", max_disp_cells);
+        pp.query("theta_rays", theta_rays);
+        pp.query("theta_ray_n", theta_ray_n);
+        pp.query("theta_ray_dr", theta_ray_dr);
+        pp.query("theta_profile_interval", theta_profile_interval);
     }
 };
+
+// Spherical expansion along the six coordinate rays from the box centre, from the grid fields interpolated at
+// r_k = (k + 1/2) dr (apparent-horizon diagnostic for a nearly spherical configuration).  Along a ray with unit
+// direction n: R = r sqrt(h~_T / chi) with h~_T = (tr h~ - h~_nn) / 2, gamma_nn = h~_nn / chi,
+// Theta = 2 (dR/dr) / (R sqrt(gamma_nn)) - 2 K / 3 + A~_nn / h~_nn  (uses A^th_th = -A^r_r / 2),
+// M_MS = (R / 2) (1 - (dR/dr)^2 / gamma_nn + (R K_T)^2) with K_T = K / 3 - A~_nn / (2 h~_nn).
+// The outermost zero crossing of Theta (negative inside, positive outside) is the horizon candidate; its mean
+// coordinate radius over the rays is stored in amr->ah_ray_radius (-1 if fewer than 3 rays find one).
+void theta_ray_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real time, long step,
+                          const InitParams &ip, bool first_step)
+{
+    constexpr int NR = 6, NC = 14;
+    static const amrex::Real dirs[NR][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+    const int comps[NC] = {c_chi, c_h11, c_h12, c_h13, c_h22, c_h23, c_h33, c_K, c_A11, c_A12, c_A13, c_A22, c_A23, c_A33};
+    const amrex::Real dx_f = geom.CellSize(0) / (1 << amr->finestLevel());
+    const amrex::Real dr = ip.theta_ray_dr * dx_f;
+    const auto plo = geom.ProbLoArray(), phi = geom.ProbHiArray();
+    // rays stay inside the domain (and clear of the periodic images): r_max < 0.45 L
+    const int n = std::max(4, std::min(ip.theta_ray_n, static_cast<int>(0.45 * (phi[0] - plo[0]) / dr)));
+    const amrex::Real c0[3] = {0.5 * (plo[0] + phi[0]), 0.5 * (plo[1] + phi[1]), 0.5 * (plo[2] + phi[2])};
+    const bool io = amrex::ParallelDescriptor::IOProcessor();
+    const int npts = io ? NR * n : 0;
+    std::vector<amrex::ParticleReal> x(npts), y(npts), z(npts);
+    for (int ray = 0; ray < NR && io; ++ray)
+        for (int k = 0; k < n; ++k)
+        {
+            const amrex::Real r = (k + 0.5) * dr;
+            x[ray * n + k] = c0[0] + r * dirs[ray][0];
+            y[ray * n + k] = c0[1] + r * dirs[ray][1];
+            z[ray * n + k] = c0[2] + r * dirs[ray][2];
+        }
+    std::vector<amrex::ParticleReal> data(static_cast<size_t>(npts) * NC, 0.0);
+    InterpolationQueryParticle query(npts);
+    query.setCoords(0, x.data()).setCoords(1, y.data()).setCoords(2, z.data());
+    for (int c = 0; c < NC; ++c)
+        query.addComp(comps[c], data.data() + static_cast<size_t>(c) * npts);
+    amr->theta_interpolator.interp(query, false); // collective
+    amr->ah_ray_radius = -1.0;
+    if (!io)
+        return;
+    const bool write_prof = ip.theta_profile_interval > 0 && step % ip.theta_profile_interval == 0;
+    std::ofstream prof;
+    if (write_prof)
+    {
+        std::filesystem::create_directory("theta_profiles");
+        prof.open("theta_profiles/theta_" + std::to_string(step) + ".dat");
+        prof.precision(8);
+        prof << "# time " << time << "\n# ray r R Theta M_MS\n";
+    }
+    std::vector<double> r(n), R(n), gnn(n), Kv(n), Annh(n), Th(n), MMS(n);
+    double r_ah[NR], R_ah[NR], M_ah[NR];
+    int nfound = 0;
+    double sum_r = 0, sum_R = 0, sum_M = 0, min_R = 1e300, max_R = -1e300;
+    for (int ray = 0; ray < NR; ++ray)
+    {
+        const amrex::Real *nn = dirs[ray];
+        for (int k = 0; k < n; ++k)
+        {
+            auto g = [&](int c) { return static_cast<double>(data[static_cast<size_t>(c) * npts + ray * n + k]); };
+            const double chi = g(0);
+            const double h[3][3] = {{g(1), g(2), g(3)}, {g(2), g(4), g(5)}, {g(3), g(5), g(6)}};
+            const double A[3][3] = {{g(8), g(9), g(10)}, {g(9), g(11), g(12)}, {g(10), g(12), g(13)}};
+            double hnn = 0, Ann = 0;
+            for (int i = 0; i < 3; ++i)
+                for (int j = 0; j < 3; ++j)
+                {
+                    hnn += nn[i] * nn[j] * h[i][j];
+                    Ann += nn[i] * nn[j] * A[i][j];
+                }
+            const double hT = 0.5 * (h[0][0] + h[1][1] + h[2][2] - hnn);
+            r[k] = (k + 0.5) * dr;
+            R[k] = r[k] * std::sqrt(std::max(hT / chi, 0.0));
+            gnn[k] = hnn / chi;
+            Kv[k] = g(7);
+            Annh[k] = Ann / hnn;
+        }
+        for (int k = 0; k < n; ++k)
+        {
+            double dRdr;
+            if (k == 0) dRdr = (R[1] - R[0]) / dr;
+            else if (k == n - 1) dRdr = (R[n - 1] - R[n - 2]) / dr;
+            else dRdr = 0.5 * (R[k + 1] - R[k - 1]) / dr;
+            Th[k] = 2.0 * dRdr / (R[k] * std::sqrt(gnn[k])) - 2.0 * Kv[k] / 3.0 + Annh[k];
+            const double KT = Kv[k] / 3.0 - 0.5 * Annh[k];
+            MMS[k] = 0.5 * R[k] * (1.0 - dRdr * dRdr / gnn[k] + (R[k] * KT) * (R[k] * KT));
+            if (write_prof)
+                prof << ray << " " << r[k] << " " << R[k] << " " << Th[k] << " " << MMS[k] << "\n";
+        }
+        int kc = -1;
+        for (int k = n - 2; k >= 1; --k)
+            if (Th[k] <= 0.0 && Th[k + 1] > 0.0 && Th[k - 1] <= 0.0)
+            {
+                kc = k;
+                break;
+            }
+        r_ah[ray] = -1.0; R_ah[ray] = 0.0; M_ah[ray] = 0.0;
+        if (kc >= 0)
+        {
+            const double sfrac = -Th[kc] / (Th[kc + 1] - Th[kc]);
+            r_ah[ray] = r[kc] + sfrac * dr;
+            R_ah[ray] = R[kc] + sfrac * (R[kc + 1] - R[kc]);
+            M_ah[ray] = 0.5 * R_ah[ray];
+            ++nfound;
+            sum_r += r_ah[ray]; sum_R += R_ah[ray]; sum_M += M_ah[ray];
+            min_R = std::min(min_R, R_ah[ray]); max_R = std::max(max_R, R_ah[ray]);
+        }
+    }
+    if (nfound >= 3)
+        amr->ah_ray_radius = sum_r / nfound;
+    std::ofstream out("pbh_ah_rays.dat", first_step ? std::ios::out : std::ios::app);
+    if (first_step)
+        out << "# time n_rays_found <r_AH> <R_AH> <M_AH>=<R_AH>/2 R_min R_max r_AH(+x -x +y -y +z -z)\n";
+    out.precision(10);
+    out << time << " " << nfound << " " << (nfound ? sum_r / nfound : 0.0) << " " << (nfound ? sum_R / nfound : 0.0)
+        << " " << (nfound ? sum_M / nfound : 0.0) << " " << (nfound ? min_R : 0.0) << " " << (nfound ? max_R : 0.0);
+    for (int ray = 0; ray < NR; ++ray)
+        out << " " << r_ah[ray];
+    out << "\n";
+}
 } // namespace
 
 PBHVlasovAmr *PBHVlasovLevel::get_vlasov_amr_ptr() { return dynamic_cast<PBHVlasovAmr *>(get_gr_amr_ptr()); }
@@ -173,6 +303,7 @@ void PBHVlasovLevel::specific_post_init()
     {
         const amrex::Geometry &geom0 = amr->getLevel(0).Geom();
         amr->particles.set_lattice_buffer(ip.lattice_buffer);
+        amr->particles.set_max_disp_cells(ip.max_disp_cells);
         {
             int vd = 0;
             GRParmParse("pbh_vlasov").query("verbose_deposit", vd);
@@ -301,11 +432,15 @@ void PBHVlasovLevel::specific_post_timestep()
     {
         std::ofstream out("pbh_vlasov_out.dat", first_step ? std::ios::out : std::ios::app);
         if (first_step)
-            out << "# time <chi> <K> <rho_p> rho_max chi_min lapse_min total_mass N_particles\n";
+            out << "# time <chi> <K> <rho_p> rho_max chi_min lapse_min total_mass N_particles max_disp_cells "
+                   "n_clamped n_capped n_frozen\n";
         out.precision(10);
+        const auto &pd = amr->particles.push_diag();
         out << time << " " << chi_mean << " " << K_mean << " " << rho_mean << " " << rho_max << " " << chi_min << " "
-            << lapse_min << " " << mass << " " << np_total << "\n";
+            << lapse_min << " " << mass << " " << np_total << " " << pd.max_disp_cells << " " << pd.n_clamped << " "
+            << pd.n_capped << " " << pd.n_frozen << "\n";
     }
+    amr->particles.reset_push_diag();
     const LineExtraction<1> rho_extraction("rho_line_extraction", 0, dt, time, restart_time, first_step);
     const LineExtraction<1>::derived_vars_t rho_vars{VlasovEnergyDensity::name, {"rho"}, {BCParity::even}};
     rho_extraction.execute_query(&amr->rho_interpolator, rho_vars);
@@ -316,16 +451,21 @@ void PBHVlasovLevel::specific_post_timestep()
     const LineExtraction<1> lapse_extraction("lapse_line_extraction", c_lapse, dt, time, restart_time, first_step);
     lapse_extraction.execute_query(&amr->lapse_interpolator);
 
-    // apparent-horizon search (capped flow finder from the GRTeclyn AHFinder branch)
     InitParams ip;
     ip.read();
     const long step = lround(time / dt);
+    if (ip.theta_rays)
+        theta_ray_diagnostic(amr, Geom(), time, step, ip, first_step);
+
+    // apparent-horizon search (capped flow finder from the GRTeclyn AHFinder branch), seeded by the ray estimate
     if (ip.ah_interval > 0 && time >= ip.ah_start && step % ip.ah_interval == 0)
     {
         const auto plo = Geom().ProbLoArray(), phi = Geom().ProbHiArray();
         const std::array<double, AMREX_SPACEDIM> center = {0.5 * (plo[0] + phi[0]), 0.5 * (plo[1] + phi[1]),
                                                            0.5 * (plo[2] + phi[2])};
-        const double guess = (amr->ah_last_radius > 0.0) ? 1.3 * amr->ah_last_radius : ip.ah_guess;
+        const double guess = (amr->ah_ray_radius > 0.0)    ? amr->ah_ray_radius
+                             : (amr->ah_last_radius > 0.0) ? 1.3 * amr->ah_last_radius
+                                                           : ip.ah_guess;
         PBHAHFinder<21> finder(ip.ah_num_particles, center, guess);
         finder.set_max_iter(ip.ah_max_iter);
         finder.set_h_bounds(0.5 * Geom().CellSize(0) / (1 << amr->finestLevel()), 0.4 * (phi[0] - plo[0]));
@@ -353,7 +493,10 @@ void PBHVlasovLevel::specific_post_restart()
     auto *amr = get_vlasov_amr_ptr();
     if (Level() == 0)
     {
+        InitParams ip;
+        ip.read();
         amr->particles.setup(amr);
+        amr->particles.set_max_disp_cells(ip.max_disp_cells);
         amr->particles.read_checkpoint(amr->theRestartFile());
         amr->particles_ready = true;
         amrex::Print() << "PBHVlasov: restarted " << amr->particles.TotalNumberOfParticles() << " particles\n";

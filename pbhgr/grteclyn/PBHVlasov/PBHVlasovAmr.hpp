@@ -43,6 +43,8 @@ class PBHVlasovAmr : public GRAmr
     ParticleInterpolator<1> chi_interpolator;
     ParticleInterpolator<1> K_interpolator;
     ParticleInterpolator<1> lapse_interpolator;
+    ParticleInterpolator<14> theta_interpolator; // chi, h~_ij, K, A~_ij along the rays
+    double ah_ray_radius{-1.0};                  // horizon radius from the ray diagnostic (-1 = none)
 
     explicit PBHVlasovAmr(amrex::LevelBld *a_level_bld) : GRAmr(a_level_bld) {}
 
@@ -53,6 +55,7 @@ class PBHVlasovAmr : public GRAmr
         chi_interpolator.setup(this);
         K_interpolator.setup(this);
         lapse_interpolator.setup(this);
+        theta_interpolator.setup(this);
     }
 };
 

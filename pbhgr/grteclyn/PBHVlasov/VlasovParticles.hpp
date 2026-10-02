@@ -91,6 +91,17 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     amrex::Real total_mass(int lev);
 
     void set_verbose_deposit(bool v) { m_verbose_deposit = v; }
+    //! push diagnostics accumulated since the last reset (all levels, MPI-reduced): largest displacement in cells,
+    //! particles whose interpolation stencil was clamped to the box, whose displacement was capped, and which were
+    //! frozen for a step because the fields or the rhs at their position were not finite
+    struct push_diag_t
+    {
+        double max_disp_cells{0.0};
+        long n_clamped{0}, n_capped{0}, n_frozen{0};
+    };
+    const push_diag_t &push_diag() const { return m_push_diag; }
+    void reset_push_diag() { m_push_diag = push_diag_t{}; }
+    void set_max_disp_cells(double v) { m_max_disp_cells = v; }
     void set_deposit_options(bool ghosts, bool fine_to_coarse, bool virtuals)
     {
         m_dep_ghosts = ghosts; m_dep_fine_to_coarse = fine_to_coarse; m_dep_virtuals = virtuals;
@@ -100,6 +111,8 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     int m_lattice_buffer{4};
     bool m_verbose_deposit{false};
     bool m_dep_ghosts{true}, m_dep_fine_to_coarse{false}, m_dep_virtuals{true};
+    push_diag_t m_push_diag;
+    double m_max_disp_cells{0.8}; // cap on the displacement per push, in cells of the particle's level
 };
 
 #endif /* VLASOVPARTICLES_HPP_ */

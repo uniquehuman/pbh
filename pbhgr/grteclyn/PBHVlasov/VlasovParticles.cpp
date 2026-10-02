@@ -294,21 +294,48 @@ void metric_fields(const amrex::MultiFab &a_state_gh, const amrex::Geometry &geo
     amrex::Gpu::streamSynchronize();
 }
 
-// linear interpolation of the NFLD fields to a particle position
+// linear (CIC) interpolation of the NFLD fields to a particle position.  The stencil is clamped to the array box:
+// the field MultiFab has one ghost cell, so a particle more than half a cell outside its box (possible at the
+// midpoint of a step near a box boundary) would otherwise read out of bounds.  Returns 0 (stencil inside), 1
+// (clamped) or -1 (non-finite position; f untouched).
 template <class P>
-AMREX_GPU_DEVICE void interp_fields_at(const P &p, amrex::Array4<const amrex::Real> const &arr,
-                                       const amrex::GpuArray<amrex::Real, 3> &plo,
-                                       const amrex::GpuArray<amrex::Real, 3> &dxi, amrex::Real *f)
+AMREX_GPU_DEVICE int interp_fields_at(const P &p, amrex::Array4<const amrex::Real> const &arr,
+                                      const amrex::GpuArray<amrex::Real, 3> &plo,
+                                      const amrex::GpuArray<amrex::Real, 3> &dxi, amrex::Real *f)
 {
-    amrex::ParticleInterpolator::Linear interp(p, plo, dxi);
+    const auto lo = amrex::lbound(arr);
+    const auto hi = amrex::ubound(arr);
+    const int alo[3] = {lo.x, lo.y, lo.z}, ahi[3] = {hi.x, hi.y, hi.z};
+    int i0[3], i1[3];
+    amrex::Real w1[3];
+    int status = 0;
+    for (int d = 0; d < 3; ++d)
+    {
+        const amrex::Real l = (p.pos(d) - plo[d]) * dxi[d] - 0.5;
+        if (!(l > -1.0e15 && l < 1.0e15))
+            return -1;
+        const int i = static_cast<int>(amrex::Math::floor(l));
+        w1[d] = l - i;
+        if (i < alo[d] || i + 1 > ahi[d])
+            status = 1;
+        i0[d] = amrex::min(amrex::max(i, alo[d]), ahi[d]);
+        i1[d] = amrex::min(amrex::max(i + 1, alo[d]), ahi[d]);
+    }
+    const amrex::Real wx0 = 1.0 - w1[0], wy0 = 1.0 - w1[1], wz0 = 1.0 - w1[2];
     for (int c = 0; c < NFLD; ++c)
-        f[c] = 0.0;
-    interp.MeshToParticle(
-        p, arr, 0, 0, NFLD,
-        [=] AMREX_GPU_DEVICE(amrex::Array4<const amrex::Real> const &a, int i, int j, int k, int comp) {
-            return a(i, j, k, comp);
-        },
-        [=] AMREX_GPU_DEVICE(const P & /*part*/, int comp, amrex::Real val) { f[comp] += val; });
+        f[c] = wx0 * wy0 * wz0 * arr(i0[0], i0[1], i0[2], c) + w1[0] * wy0 * wz0 * arr(i1[0], i0[1], i0[2], c) +
+               wx0 * w1[1] * wz0 * arr(i0[0], i1[1], i0[2], c) + w1[0] * w1[1] * wz0 * arr(i1[0], i1[1], i0[2], c) +
+               wx0 * wy0 * w1[2] * arr(i0[0], i0[1], i1[2], c) + w1[0] * wy0 * w1[2] * arr(i1[0], i0[1], i1[2], c) +
+               wx0 * w1[1] * w1[2] * arr(i0[0], i1[1], i1[2], c) + w1[0] * w1[1] * w1[2] * arr(i1[0], i1[1], i1[2], c);
+    return status;
+}
+
+AMREX_GPU_DEVICE inline bool finite_rhs(const amrex::Real *kx, const amrex::Real *ku)
+{
+    for (int i = 0; i < 3; ++i)
+        if (!(std::isfinite(kx[i]) && std::isfinite(ku[i])))
+            return false;
+    return true;
 }
 } // namespace
 
@@ -424,34 +451,80 @@ void VlasovParticles::push(int lev, amrex::Real dt, const amrex::MultiFab &a_sta
     metric_fields(a_state_gh, geom, fld);
     const auto plo = geom.ProbLoArray();
     const auto dxi = geom.InvCellSizeArray();
-    // stage 1: k1 at (x^n, u^n); move to the midpoint (particles stay within their box's ghost region)
+    const amrex::Real dx0 = geom.CellSize(0);
+    const amrex::Real cap_full = m_max_disp_cells * dx0; // cap on the displacement per step
+    const amrex::Real cap_half = 0.5 * cap_full;
+    // diagnostics: [0] clamped stencils, [1] capped displacements, [2] frozen particles; max displacement
+    amrex::Gpu::DeviceVector<long> cnt(3, 0L);
+    amrex::Gpu::DeviceVector<amrex::Real> dmax(1, 0.0);
+    long *pcnt = cnt.data();
+    amrex::Real *pdmax = dmax.data();
+    // stage 1: k1 at (x^n, u^n); move to the midpoint.  The state is saved first so that stage 2 can restore it.
     amrex::MeshToParticle(*this, fld, lev,
                           [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
-                              amrex::Real f[NFLD];
-                              interp_fields_at(p, arr, plo, dxi, f);
-                              const MetricAtParticle M = MetricAtParticle::from(f);
-                              amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)}, kx[3], ku[3];
-                              M.rhs(u, kx, ku);
                               p.rdata(px0) = p.pos(0); p.rdata(py0) = p.pos(1); p.rdata(pz0) = p.pos(2);
-                              p.rdata(u01) = u[0]; p.rdata(u02) = u[1]; p.rdata(u03) = u[2];
+                              p.rdata(u01) = p.rdata(u1); p.rdata(u02) = p.rdata(u2); p.rdata(u03) = p.rdata(u3);
+                              amrex::Real f[NFLD];
+                              const int st = interp_fields_at(p, arr, plo, dxi, f);
+                              if (st == 1) amrex::Gpu::Atomic::Add(pcnt + 0, 1L);
+                              if (st < 0) { amrex::Gpu::Atomic::Add(pcnt + 2, 1L); return; }
+                              const MetricAtParticle M = MetricAtParticle::from(f);
+                              const amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
+                              amrex::Real kx[3], ku[3];
+                              M.rhs(u, kx, ku);
+                              if (!finite_rhs(kx, ku)) { amrex::Gpu::Atomic::Add(pcnt + 2, 1L); return; }
+                              amrex::Real d[3] = {0.5 * dt * kx[0], 0.5 * dt * kx[1], 0.5 * dt * kx[2]};
+                              const amrex::Real dn = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                              amrex::Gpu::Atomic::Max(pdmax, 2.0 * dn);
+                              if (dn > cap_half)
+                              {
+                                  const amrex::Real sc = cap_half / dn;
+                                  for (int i = 0; i < 3; ++i) d[i] *= sc;
+                                  amrex::Gpu::Atomic::Add(pcnt + 1, 1L);
+                              }
                               for (int i = 0; i < 3; ++i)
-                                  p.pos(i) += 0.5 * dt * kx[i];
+                                  p.pos(i) += d[i];
                               p.rdata(u1) = u[0] + 0.5 * dt * ku[0];
                               p.rdata(u2) = u[1] + 0.5 * dt * ku[1];
                               p.rdata(u3) = u[2] + 0.5 * dt * ku[2];
                           });
     amrex::Gpu::streamSynchronize();
-    // stage 2: k2 at the midpoint, full step from the saved state; Gamma at the new state
+    // stage 2: k2 at the midpoint, full step from the saved state; Gamma at the new state.  A particle whose
+    // fields or rhs are not finite is restored to its saved state (frozen for this step) and counted.
     amrex::MeshToParticle(*this, fld, lev,
                           [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
                               amrex::Real f[NFLD];
-                              interp_fields_at(p, arr, plo, dxi, f);
-                              const MetricAtParticle M = MetricAtParticle::from(f);
-                              amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)}, kx[3], ku[3];
-                              M.rhs(u, kx, ku);
-                              p.pos(0) = p.rdata(px0) + dt * kx[0];
-                              p.pos(1) = p.rdata(py0) + dt * kx[1];
-                              p.pos(2) = p.rdata(pz0) + dt * kx[2];
+                              const int st = interp_fields_at(p, arr, plo, dxi, f);
+                              if (st == 1) amrex::Gpu::Atomic::Add(pcnt + 0, 1L);
+                              bool ok = st >= 0;
+                              MetricAtParticle M;
+                              amrex::Real kx[3] = {0.0, 0.0, 0.0}, ku[3] = {0.0, 0.0, 0.0};
+                              if (ok)
+                              {
+                                  M = MetricAtParticle::from(f);
+                                  const amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
+                                  M.rhs(u, kx, ku);
+                                  ok = finite_rhs(kx, ku);
+                              }
+                              if (!ok)
+                              {
+                                  p.pos(0) = p.rdata(px0); p.pos(1) = p.rdata(py0); p.pos(2) = p.rdata(pz0);
+                                  p.rdata(u1) = p.rdata(u01); p.rdata(u2) = p.rdata(u02); p.rdata(u3) = p.rdata(u03);
+                                  amrex::Gpu::Atomic::Add(pcnt + 2, 1L);
+                                  return;
+                              }
+                              amrex::Real d[3] = {dt * kx[0], dt * kx[1], dt * kx[2]};
+                              const amrex::Real dn = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                              amrex::Gpu::Atomic::Max(pdmax, dn);
+                              if (dn > cap_full)
+                              {
+                                  const amrex::Real sc = cap_full / dn;
+                                  for (int i = 0; i < 3; ++i) d[i] *= sc;
+                                  amrex::Gpu::Atomic::Add(pcnt + 1, 1L);
+                              }
+                              p.pos(0) = p.rdata(px0) + d[0];
+                              p.pos(1) = p.rdata(py0) + d[1];
+                              p.pos(2) = p.rdata(pz0) + d[2];
                               p.rdata(u1) = p.rdata(u01) + dt * ku[0];
                               p.rdata(u2) = p.rdata(u02) + dt * ku[1];
                               p.rdata(u3) = p.rdata(u03) + dt * ku[2];
@@ -459,6 +532,21 @@ void VlasovParticles::push(int lev, amrex::Real dt, const amrex::MultiFab &a_sta
                               p.rdata(Gamma) = M.Gamma(un);
                           });
     amrex::Gpu::streamSynchronize();
+    // diagnostics, reduced over the ranks
+    std::vector<long> c(3, 0L);
+    std::vector<amrex::Real> dm(1, 0.0);
+    amrex::Gpu::copy(amrex::Gpu::deviceToHost, cnt.begin(), cnt.end(), c.begin());
+    amrex::Gpu::copy(amrex::Gpu::deviceToHost, dmax.begin(), dmax.end(), dm.begin());
+    amrex::ParallelDescriptor::ReduceLongSum(c.data(), 3);
+    amrex::ParallelDescriptor::ReduceRealMax(dm[0]);
+    const amrex::Real dm_cells = dm[0] / dx0;
+    m_push_diag.max_disp_cells = std::max(m_push_diag.max_disp_cells, static_cast<double>(dm_cells));
+    m_push_diag.n_clamped += c[0];
+    m_push_diag.n_capped += c[1];
+    m_push_diag.n_frozen += c[2];
+    if (c[0] + c[1] + c[2] > 0 || dm_cells > 0.5)
+        amrex::Print() << "PBHVlasov push L" << lev << ": max displacement " << dm_cells << " cells, clamped " << c[0]
+                       << ", capped " << c[1] << ", frozen " << c[2] << "\n";
     Redistribute();
 }
 
