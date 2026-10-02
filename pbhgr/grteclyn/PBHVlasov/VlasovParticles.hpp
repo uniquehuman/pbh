@@ -6,7 +6,8 @@
  * deposit(): rho = sum m Gamma W / (sqrt(gamma) dV), S_i = sum m u_i W / (sqrt(gamma) dV),
  *            S_ij = sum m u_i u_j W / (Gamma sqrt(gamma) dV)   (CIC kernel W, normal-observer densities)
  * push():    dx^i/dt = alpha gamma^{ij} u_j / Gamma - beta^i
- *            du_i/dt = -alpha Gamma d_i alpha + u_j d_i beta^j - (alpha / 2 Gamma) u_j u_k d_i gamma^{jk}
+ *            du_i/dt = -Gamma d_i alpha + u_j d_i beta^j - (alpha / 2 Gamma) u_j u_k d_i gamma^{jk}
+ *            (Hamilton's equations of H = alpha Gamma - beta^j u_j, Gamma = sqrt(1 + gamma^{jk} u_j u_k))
  *            (midpoint RK2; the fields are interpolated linearly from a MultiFab of values and derivatives) */
 #ifndef VLASOVPARTICLES_HPP_
 #define VLASOVPARTICLES_HPP_

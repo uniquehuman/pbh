@@ -82,7 +82,7 @@ struct MetricAtParticle
             for (int j = 0; j < 3; ++j)
                 gu += gUU[i][j] * u[j];
             dx[i] = alpha * gu / G - beta[i];
-            amrex::Real t = -alpha * G * dalpha[i];
+            amrex::Real t = -G * dalpha[i]; // -Gamma d_i alpha (H = alpha Gamma - beta^j u_j)
             for (int j = 0; j < 3; ++j)
             {
                 t += u[j] * dbeta[i][j];
