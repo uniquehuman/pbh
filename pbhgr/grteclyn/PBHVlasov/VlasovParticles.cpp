@@ -593,6 +593,30 @@ VlasovParticles::tau_stats_t VlasovParticles::tau_in_shell(const amrex::Real *ce
     return s;
 }
 
+void VlasovParticles::tau_profile(const amrex::Real *center, amrex::Real dr, int nbins, std::vector<double> &n,
+                                  std::vector<double> &mass, std::vector<double> &mtau, std::vector<double> &mgamma)
+{
+    n.assign(nbins, 0.0); mass.assign(nbins, 0.0); mtau.assign(nbins, 0.0); mgamma.assign(nbins, 0.0);
+    for (int l = 0; l <= this->finestLevel(); ++l)
+        for (PC::ParIterType pti(*this, l); pti.isValid(); ++pti)
+        {
+            const auto &aos = pti.GetArrayOfStructs();
+            for (const auto &p : aos)
+            {
+                const amrex::Real X = p.pos(0) - center[0], Y = p.pos(1) - center[1], Z = p.pos(2) - center[2];
+                const int k = static_cast<int>(std::sqrt(X * X + Y * Y + Z * Z) / dr);
+                if (k >= nbins)
+                    continue;
+                const double mm = p.rdata(m);
+                n[k] += 1.0; mass[k] += mm; mtau[k] += mm * p.rdata(tau); mgamma[k] += mm * p.rdata(Gamma);
+            }
+        }
+    amrex::ParallelDescriptor::ReduceRealSum(n.data(), nbins);
+    amrex::ParallelDescriptor::ReduceRealSum(mass.data(), nbins);
+    amrex::ParallelDescriptor::ReduceRealSum(mtau.data(), nbins);
+    amrex::ParallelDescriptor::ReduceRealSum(mgamma.data(), nbins);
+}
+
 amrex::Real VlasovParticles::total_mass(int lev)
 {
     amrex::Real sum = 0.0;

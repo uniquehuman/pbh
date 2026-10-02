@@ -101,6 +101,9 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     };
     tau_stats_t tau_in_shell(const amrex::Real *center, amrex::Real r_lo, amrex::Real r_hi);
     void set_tau0(amrex::Real t) { m_tau0 = t; }
+    //! radial profile (bins of width dr about center, all levels, MPI-reduced): count, rest mass, sum m tau, sum m Gamma
+    void tau_profile(const amrex::Real *center, amrex::Real dr, int nbins, std::vector<double> &n, std::vector<double> &mass,
+                     std::vector<double> &mtau, std::vector<double> &mgamma);
 
     void set_verbose_deposit(bool v) { m_verbose_deposit = v; }
     //! push diagnostics accumulated since the last reset (all levels, MPI-reduced): largest displacement in cells,

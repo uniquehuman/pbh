@@ -187,7 +187,8 @@ void theta_ray_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex:
 
 // proper time of the matter at the ray horizon (shell |r - r_AH| < max(dx_f, 0.05 r_AH)), inside it and in the core
 // (r < 2 dx_f): pbh_ah_tau.dat
-void tau_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real time, bool first_step)
+void tau_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real time, bool first_step, long step,
+                    int profile_interval)
 {
     const amrex::Real dx_f = geom.CellSize(0) / (1 << amr->finestLevel());
     const auto plo = geom.ProbLoArray(), phi = geom.ProbHiArray();
@@ -201,6 +202,28 @@ void tau_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real 
         inside = amr->particles.tau_in_shell(c0, 0.0, r_ah);
     }
     const VlasovParticles::tau_stats_t core = amr->particles.tau_in_shell(c0, 0.0, 2.0 * dx_f);
+    // radial profile of the particle proper time (bins of 2 dx_f): tau_profiles/tau_<step>.dat
+    if (profile_interval > 0 && step % profile_interval == 0)
+    {
+        constexpr int nb = 96;
+        std::vector<double> n, mass, mtau, mgam;
+        amr->particles.tau_profile(c0, 2.0 * dx_f, nb, n, mass, mtau, mgam);
+        if (amrex::ParallelDescriptor::IOProcessor())
+        {
+            std::filesystem::create_directory("tau_profiles");
+            std::ofstream pf("tau_profiles/tau_" + std::to_string(step) + ".dat");
+            pf.precision(10);
+            pf << "# time " << time << "\n# k r_lo r_hi n mass M_in(rest, cumulative) <tau> <Gamma>\n";
+            double cum = 0.0;
+            for (int k = 0; k < nb; ++k)
+            {
+                cum += mass[k];
+                pf << k << " " << 2.0 * dx_f * k << " " << 2.0 * dx_f * (k + 1) << " " << n[k] << " " << mass[k] << " "
+                   << cum << " " << (mass[k] > 0 ? mtau[k] / mass[k] : 0.0) << " "
+                   << (mass[k] > 0 ? mgam[k] / mass[k] : 0.0) << "\n";
+            }
+        }
+    }
     if (amrex::ParallelDescriptor::IOProcessor())
     {
         std::ofstream out("pbh_ah_tau.dat", first_step ? std::ios::out : std::ios::app);
@@ -490,7 +513,7 @@ void PBHVlasovLevel::specific_post_timestep()
     if (ip.theta_rays)
     {
         theta_ray_diagnostic(amr, Geom(), time, step, ip, first_step);
-        tau_diagnostic(amr, Geom(), time, first_step);
+        tau_diagnostic(amr, Geom(), time, first_step, step, ip.theta_profile_interval);
     }
 
     // apparent-horizon search (capped flow finder from the GRTeclyn AHFinder branch), seeded by the ray estimate
