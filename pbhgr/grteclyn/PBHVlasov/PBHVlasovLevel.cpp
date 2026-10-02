@@ -41,6 +41,7 @@ struct InitParams
     int theta_ray_n{256};     // points per ray
     amrex::Real theta_ray_dr{0.5}; // spacing in finest-level cells
     int theta_profile_interval{20}; // coarse steps between full Theta(r) profile dumps (0 = never)
+    amrex::Real tau0{0.0};    // initial proper time of the particles (the LTB time of the initial slice)
     void read()
     {
         GRParmParse pp("pbh_vlasov");
@@ -59,6 +60,7 @@ struct InitParams
         pp.query("theta_ray_n", theta_ray_n);
         pp.query("theta_ray_dr", theta_ray_dr);
         pp.query("theta_profile_interval", theta_profile_interval);
+        pp.query("tau0", tau0);
     }
 };
 
@@ -99,8 +101,8 @@ void theta_ray_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex:
         query.addComp(comps[c], data.data() + static_cast<size_t>(c) * npts);
     amr->theta_interpolator.interp(query, false); // collective
     amr->ah_ray_radius = -1.0;
-    if (!io)
-        return;
+    if (io)
+    {
     const bool write_prof = ip.theta_profile_interval > 0 && step % ip.theta_profile_interval == 0;
     std::ofstream prof;
     if (write_prof)
@@ -179,6 +181,36 @@ void theta_ray_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex:
     for (int ray = 0; ray < NR; ++ray)
         out << " " << r_ah[ray];
     out << "\n";
+    }
+    amrex::ParallelDescriptor::Bcast(&amr->ah_ray_radius, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+}
+
+// proper time of the matter at the ray horizon (shell |r - r_AH| < max(dx_f, 0.05 r_AH)), inside it and in the core
+// (r < 2 dx_f): pbh_ah_tau.dat
+void tau_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real time, bool first_step)
+{
+    const amrex::Real dx_f = geom.CellSize(0) / (1 << amr->finestLevel());
+    const auto plo = geom.ProbLoArray(), phi = geom.ProbHiArray();
+    const amrex::Real c0[3] = {0.5 * (plo[0] + phi[0]), 0.5 * (plo[1] + phi[1]), 0.5 * (plo[2] + phi[2])};
+    const amrex::Real r_ah = amr->ah_ray_radius;
+    VlasovParticles::tau_stats_t shell, inside;
+    if (r_ah > 0.0)
+    {
+        const amrex::Real w = std::max(dx_f, 0.05 * r_ah);
+        shell = amr->particles.tau_in_shell(c0, std::max(0.0, r_ah - w), r_ah + w);
+        inside = amr->particles.tau_in_shell(c0, 0.0, r_ah);
+    }
+    const VlasovParticles::tau_stats_t core = amr->particles.tau_in_shell(c0, 0.0, 2.0 * dx_f);
+    if (amrex::ParallelDescriptor::IOProcessor())
+    {
+        std::ofstream out("pbh_ah_tau.dat", first_step ? std::ios::out : std::ios::app);
+        if (first_step)
+            out << "# time r_AH n_shell <tau>_shell tau_min tau_max <Gamma>_shell n_in M_in <tau>_in n_core <tau>_core\n";
+        out.precision(10);
+        out << time << " " << r_ah << " " << shell.n << " " << shell.tau_mean << " " << shell.tau_min << " "
+            << shell.tau_max << " " << shell.gamma_mean << " " << inside.n << " " << inside.mass << " "
+            << inside.tau_mean << " " << core.n << " " << core.tau_mean << "\n";
+    }
 }
 } // namespace
 
@@ -314,6 +346,7 @@ void PBHVlasovLevel::specific_post_init()
             GRParmParse("pbh_vlasov").query("dep_virtuals", dv);
             amr->particles.set_deposit_options(dg != 0, df != 0, dv != 0);
         }
+        amr->particles.set_tau0(ip.tau0);
         if (ip.mode == "flrw")
         {
             const amrex::Real rho = 3.0 * ip.H0 * ip.H0 / (8.0 * M_PI);
@@ -455,7 +488,10 @@ void PBHVlasovLevel::specific_post_timestep()
     ip.read();
     const long step = lround(time / dt);
     if (ip.theta_rays)
+    {
         theta_ray_diagnostic(amr, Geom(), time, step, ip, first_step);
+        tau_diagnostic(amr, Geom(), time, first_step);
+    }
 
     // apparent-horizon search (capped flow finder from the GRTeclyn AHFinder branch), seeded by the ray estimate
     if (ip.ah_interval > 0 && time >= ip.ah_start && step % ip.ah_interval == 0)

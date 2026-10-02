@@ -189,6 +189,7 @@ void VlasovParticles::init_uniform(const amrex::Geometry &geom, amrex::Real rho,
     make_lattice(*this, geom, n_per_dir, m_lattice_buffer, [=](ParticleType &p, amrex::Real dV_sub) {
         p.rdata(m) = rho * dV_sub;
         p.rdata(Gamma) = 1.0;
+        p.rdata(tau) = m_tau0;
     });
 }
 
@@ -221,6 +222,7 @@ void VlasovParticles::init_from_table(const amrex::Geometry &geom, const std::ve
             p.rdata(u3) = ur * psi2 * Z / r;
         }
         p.rdata(Gamma) = G;
+        p.rdata(tau) = m_tau0;
     });
 }
 
@@ -498,13 +500,14 @@ void VlasovParticles::push(int lev, amrex::Real dt, const amrex::MultiFab &a_sta
                               if (st == 1) amrex::Gpu::Atomic::Add(pcnt + 0, 1L);
                               bool ok = st >= 0;
                               MetricAtParticle M;
-                              amrex::Real kx[3] = {0.0, 0.0, 0.0}, ku[3] = {0.0, 0.0, 0.0};
+                              amrex::Real kx[3] = {0.0, 0.0, 0.0}, ku[3] = {0.0, 0.0, 0.0}, dtau = 0.0;
                               if (ok)
                               {
                                   M = MetricAtParticle::from(f);
                                   const amrex::Real u[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
                                   M.rhs(u, kx, ku);
-                                  ok = finite_rhs(kx, ku);
+                                  dtau = dt * M.alpha / M.Gamma(u); // d tau / dt = alpha / Gamma at the midpoint
+                                  ok = finite_rhs(kx, ku) && std::isfinite(dtau);
                               }
                               if (!ok)
                               {
@@ -530,6 +533,7 @@ void VlasovParticles::push(int lev, amrex::Real dt, const amrex::MultiFab &a_sta
                               p.rdata(u3) = p.rdata(u03) + dt * ku[2];
                               const amrex::Real un[3] = {p.rdata(u1), p.rdata(u2), p.rdata(u3)};
                               p.rdata(Gamma) = M.Gamma(un);
+                              p.rdata(tau) += dtau;
                           });
     amrex::Gpu::streamSynchronize();
     // diagnostics, reduced over the ranks
@@ -548,6 +552,45 @@ void VlasovParticles::push(int lev, amrex::Real dt, const amrex::MultiFab &a_sta
         amrex::Print() << "PBHVlasov push L" << lev << ": max displacement " << dm_cells << " cells, clamped " << c[0]
                        << ", capped " << c[1] << ", frozen " << c[2] << "\n";
     Redistribute();
+}
+
+VlasovParticles::tau_stats_t VlasovParticles::tau_in_shell(const amrex::Real *center, amrex::Real r_lo, amrex::Real r_hi)
+{
+    tau_stats_t s;
+    double sum_mt = 0.0, sum_mg = 0.0, tmin = 1e300, tmax = -1e300;
+    for (int l = 0; l <= this->finestLevel(); ++l)
+        for (PC::ParIterType pti(*this, l); pti.isValid(); ++pti)
+        {
+            const auto &aos = pti.GetArrayOfStructs();
+            for (const auto &p : aos)
+            {
+                const amrex::Real X = p.pos(0) - center[0], Y = p.pos(1) - center[1], Z = p.pos(2) - center[2];
+                const amrex::Real r = std::sqrt(X * X + Y * Y + Z * Z);
+                if (r < r_lo || r >= r_hi)
+                    continue;
+                const double mm = p.rdata(m), t = p.rdata(tau);
+                ++s.n;
+                s.mass += mm;
+                sum_mt += mm * t;
+                sum_mg += mm * p.rdata(Gamma);
+                tmin = std::min(tmin, t);
+                tmax = std::max(tmax, t);
+            }
+        }
+    amrex::ParallelDescriptor::ReduceLongSum(s.n);
+    amrex::ParallelDescriptor::ReduceRealSum(s.mass);
+    amrex::ParallelDescriptor::ReduceRealSum(sum_mt);
+    amrex::ParallelDescriptor::ReduceRealSum(sum_mg);
+    amrex::ParallelDescriptor::ReduceRealMin(tmin);
+    amrex::ParallelDescriptor::ReduceRealMax(tmax);
+    if (s.n > 0 && s.mass > 0.0)
+    {
+        s.tau_mean = sum_mt / s.mass;
+        s.gamma_mean = sum_mg / s.mass;
+        s.tau_min = tmin;
+        s.tau_max = tmax;
+    }
+    return s;
 }
 
 amrex::Real VlasovParticles::total_mass(int lev)

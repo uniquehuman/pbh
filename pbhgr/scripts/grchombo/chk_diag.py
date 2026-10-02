@@ -45,11 +45,14 @@ def read_fab(levdir, fname, offset, box, ncomp, ngrow):
 sel = "chi K lapse shift1 B1 Gamma1 A11 h11 h22 rho_p S1 S11".split()
 levels = sorted(glob.glob(f"{chk}/Level_*"))
 hdr0 = glob.glob(f"{chk}/Level_0/*_H")[0]
-if parse_header(hdr0)[0] == 4:
-    names = names4; I = {n: i for i, n in enumerate(names)}; sel = "chi K lapse rho_p".split()
-    small = True
-else:
-    small = False
+small = False
+if os.path.exists(f"{chk}/Header") and open(f"{chk}/Header").readline().startswith("HyperCLaw"):
+    # plotfile: the variable names are listed in the Header
+    lines = open(f"{chk}/Header").read().split("\n")
+    nv = int(lines[1]); names = lines[2:2 + nv]; I = {n: i for i, n in enumerate(names)}
+    sel = [n for n in "chi K lapse rho_p h11 h22 A11 A22 shift1".split() if n in I]
+    small = not all(n in I for n in "h11 h12 h13 h22 h23 h33 A11 A12 A13 A22 A23 A33 K chi".split())
+    cols_plot = ["x"] + sel
 finest = len(levels) - 1
 for lev in range(len(levels)):
     hdr = glob.glob(f"{chk}/Level_{lev}/*_H")[0]
@@ -77,7 +80,7 @@ for b, (box, fab) in enumerate(zip(boxes, fabs)):
 x = (np.arange(i0, i1) + 0.5 - c) * dx
 r = np.sqrt(x**2 + 2 * (0.5 * dx) ** 2)
 print(f"\nfinest level {lev}, dx={dx:.4f}; x-line through the centre (y=z=+dx/2):")
-cols = ("x chi lapse K rho_p".split() if small else "x chi lapse K shift1 Gamma1 h11 h22 A11 A22 rho_p S1".split())
+cols = (cols_plot if "cols_plot" in globals() else "x chi lapse K shift1 Gamma1 h11 h22 A11 A22 rho_p S1".split())
 print("  ".join(f"{cname:>10s}" for cname in cols))
 for n in range(len(x)):
     vals = [x[n]] + [line[I[cname], n] for cname in cols[1:]]

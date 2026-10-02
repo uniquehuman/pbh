@@ -29,7 +29,9 @@ namespace VlasovIdx
 enum
 {
     dep0 = 0, // = m Gamma (the "mass" of the deposit); dep1..dep9 = w_k / (m Gamma) with w_k = m u_i, m u_i u_j / Gamma
-    m = 10, u1, u2, u3, px0, py0, pz0, u01, u02, u03, Gamma, NAOS
+    m = 10, u1, u2, u3, px0, py0, pz0, u01, u02, u03, Gamma,
+    tau, // proper time along the particle worldline (d tau = alpha dt / Gamma), initialised to pbh_vlasov.tau0
+    NAOS
 };
 constexpr int NDEP = 10;
 // interpolated field layout (per-particle local array inside the push): value then d/dx, d/dy, d/dz for each of
@@ -89,6 +91,15 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
 
     //! total rest mass over all levels (diagnostics)
     amrex::Real total_mass(int lev);
+    //! proper-time statistics of the particles in the spherical shell r_lo <= |x - c| < r_hi (all levels, MPI-reduced):
+    //! count, rest mass, mass-weighted mean tau and Gamma, min/max tau
+    struct tau_stats_t
+    {
+        long n{0};
+        double mass{0.0}, tau_mean{0.0}, gamma_mean{0.0}, tau_min{0.0}, tau_max{0.0};
+    };
+    tau_stats_t tau_in_shell(const amrex::Real *center, amrex::Real r_lo, amrex::Real r_hi);
+    void set_tau0(amrex::Real t) { m_tau0 = t; }
 
     void set_verbose_deposit(bool v) { m_verbose_deposit = v; }
     //! push diagnostics accumulated since the last reset (all levels, MPI-reduced): largest displacement in cells,
@@ -112,6 +123,7 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     bool m_verbose_deposit{false};
     bool m_dep_ghosts{true}, m_dep_fine_to_coarse{false}, m_dep_virtuals{true};
     push_diag_t m_push_diag;
+    amrex::Real m_tau0{0.0};
     double m_max_disp_cells{0.8}; // cap on the displacement per push, in cells of the particle's level
 };
 

@@ -223,7 +223,7 @@ def main():
 amr.verbose = 1
 amr.plot_int = {plot_v}
 amr.check_int = {10 * plot_v}
-amr.plot_vars = chi lapse K rho_p
+amr.plot_vars = chi lapse K rho_p h11 h22 A11 A22 shift1
 amr.n_cell = {a.N} {a.N} {a.N}
 geometry.prob_extent = {L:.6f} {L:.6f} {L:.6f}
 geometry.is_periodic = 1 1 1
@@ -255,14 +255,21 @@ pbh_vlasov.ah_start = {max(0.0, a.ah_start * tC0 - t0):.4f}
 pbh_vlasov.ah_guess = {0.1 * rm_phys:.4f}
 pbh_vlasov.ah_num_particles = 2000
 pbh_vlasov.ah_max_iter = 3000
+# particle proper time starts at the LTB time of the initial slice; ray expansion diagnostic every coarse step
+pbh_vlasov.tau0 = {t0:.6f}
+pbh_vlasov.theta_rays = 1
+pbh_vlasov.theta_ray_n = 256
+pbh_vlasov.theta_ray_dr = 0.5
+pbh_vlasov.theta_profile_interval = 4
+pbh_vlasov.max_disp_cells = 0.8
 # AMReX TimeIntegrator used by the AH finder flow (required parameters)
 integration.type = RungeKutta
 integration.rk.type = 4
 ah_finder.eta = 3.0
 ah_finder.c = 1.0
+ah_finder.cfl_factor = 2.0
 ah_finder.tolerance = 1e-4
 ah_finder.r = 1.15
-ah_finder.cfl_factor = 7.0
 rho_line_extraction.enabled = true
 rho_line_extraction.end = {L * (1 - 1.0 / a.N):.6f} {L / 2:.6f} {L / 2:.6f}
 chi_line_extraction.enabled = true
