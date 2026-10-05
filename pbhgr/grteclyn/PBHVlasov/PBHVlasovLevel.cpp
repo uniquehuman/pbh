@@ -61,6 +61,7 @@ struct InitParams
     amrex::Real gauge_on_time{-1.0};
     int dt_mode{0};           // 0: fixed dt = dt_multiplier dx; 1: expansion-aware step with adaptive subcycling
     amrex::Real dt_frac{0.03}; // dt_mode 1: coarse step <= dt_frac (t + tau0)
+    amrex::Real dt_scale_max{1.0e30}; // dt_mode 1: cap on 1/sqrt(chi_max) (1 = freeze the step once chi_far <= 1)
     void read()
     {
         GRParmParse pp("pbh_vlasov");
@@ -94,6 +95,7 @@ struct InitParams
         pp.query("gauge_on_time", gauge_on_time);
         pp.query("dt_mode", dt_mode);
         pp.query("dt_frac", dt_frac);
+        pp.query("dt_scale_max", dt_scale_max);
     }
 };
 
@@ -849,7 +851,7 @@ void PBHVlasovLevel::set_time_steps(int finest_level, amrex::Vector<int> &n_cycl
     auto *amr = get_vlasov_amr_ptr();
     const amrex::Real time = get_state_data(state_index).curTime();
     const amrex::Real chi_max = amr->getLevel(0).get_new_data(state_index).max(c_chi);
-    amr->dt_scale = 1.0 / std::sqrt(chi_max);
+    amr->dt_scale = std::min(1.0 / std::sqrt(chi_max), ip.dt_scale_max);
     dt_level[0] = std::min(mult * parent->Geom(0).CellSize(0) * amr->dt_scale, ip.dt_frac * (time + ip.tau0));
     n_cycle[0] = 1;
     for (int l = 1; l <= finest_level; ++l)
@@ -1185,7 +1187,11 @@ void PBHVlasovLevel::specific_post_restart()
             ipr.read();
             amr->gauge_active = !(ipr.gauge_on_time > 0.0) || get_state_data(state_index).curTime() >= ipr.gauge_on_time;
         }
-        amr->dt_scale = 1.0 / std::sqrt(amr->getLevel(0).get_new_data(state_index).max(c_chi));
+        {
+            InitParams ips;
+            ips.read();
+            amr->dt_scale = std::min(1.0 / std::sqrt(amr->getLevel(0).get_new_data(state_index).max(c_chi)), ips.dt_scale_max);
+        }
     }
 }
 
