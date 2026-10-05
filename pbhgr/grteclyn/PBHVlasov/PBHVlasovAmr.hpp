@@ -40,6 +40,8 @@ class PBHVlasovAmr : public GRAmr
             amrex::average_down(getLevel(lev).get_new_data(state_index), getLevel(lev - 1).get_new_data(state_index),
                                 getLevel(lev).Geom(), getLevel(lev - 1).Geom(), c_rho_p, 10, refRatio(lev - 1));
     }
+    // false while pbh_vlasov.gauge_on_time has not been reached: geodesic slicing (lapse 1, shift 0)
+    bool gauge_active{true};
     amrex::Real K_far_time{0.0}; // time at which K_far was measured (it is extrapolated as dust FLRW inside a step)
     amrex::Real K_far{0.0}; // far-field K for PBHGaugeTeclyn, updated every coarse step // set once the container is defined and populated (post_init)
     ParticleInterpolator<1> rho_interpolator;

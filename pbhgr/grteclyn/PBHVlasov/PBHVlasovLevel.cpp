@@ -54,6 +54,11 @@ struct InitParams
     int sphere_diag{0};       // expansion of the coordinate spheres on sphere_ndir directions (non-spherical runs)
     int sphere_ndir{96}, sphere_nr{160};
     amrex::Real sphere_dr{0.75}; // radial spacing in finest-level cells
+    // geodesic slicing (lapse 1, shift 0) until this run time, then the profile-referenced 1+log lapse and the
+    // Gamma-driver are switched on with fref = K(x)/K_far of that moment (< 0: gauge on from the start).  At a
+    // super-horizon start the gauge-driven streaming of the particles through the grid spoils the binding energy
+    // (devlog 5 Oct); in geodesic slicing the particles stay at their lattice sites and LTB is reproduced to 1e-4.
+    amrex::Real gauge_on_time{-1.0};
     int dt_mode{0};           // 0: fixed dt = dt_multiplier dx; 1: expansion-aware step with adaptive subcycling
     amrex::Real dt_frac{0.03}; // dt_mode 1: coarse step <= dt_frac (t + tau0)
     void read()
@@ -86,6 +91,7 @@ struct InitParams
         pp.query("sphere_ndir", sphere_ndir);
         pp.query("sphere_nr", sphere_nr);
         pp.query("sphere_dr", sphere_dr);
+        pp.query("gauge_on_time", gauge_on_time);
         pp.query("dt_mode", dt_mode);
         pp.query("dt_frac", dt_frac);
     }
@@ -721,6 +727,7 @@ void PBHVlasovLevel::specific_post_init()
         amr->deposit_all_levels(state_index);
         amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K); // far-field reference before the first RHS
         amr->K_far_time = get_state_data(state_index).curTime();
+        amr->gauge_active = !(ip.gauge_on_time > 0.0);
     }
 }
 
@@ -996,6 +1003,7 @@ void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab 
         gauge.scale_shift_Gamma(c_far * c_far);
     }
     const FourthOrderDerivatives diss_deriv(Geom().CellSize(0));
+    const bool gauge_active = get_vlasov_amr_ptr()->gauge_active;
     amrex::ParallelFor(a_rhs, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
         ccz4_rhs.compute_chi_and_h_ij(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
     });
@@ -1005,6 +1013,15 @@ void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab 
     amrex::ParallelFor(a_rhs, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
         ccz4_rhs.add_emtensor_rhs(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
         gauge.calculate_rhs(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
+        if (!gauge_active)
+        {
+            rhs_arrays[box_no](ix, iy, iz, c_lapse) = 0.0;
+            for (int d = 0; d < 3; ++d)
+            {
+                rhs_arrays[box_no](ix, iy, iz, c_shift1 + d) = 0.0;
+                rhs_arrays[box_no](ix, iy, iz, c_B1 + d) = 0.0;
+            }
+        }
         ccz4_rhs.add_matter_rhs(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
         diss_deriv.add_dissipation(ix, iy, iz, rhs_arrays[box_no].cellData(ix, iy, iz), const_soln_arrays[box_no],
                                    sigma_ko, NUM_CCZ4_VARS);
@@ -1045,6 +1062,23 @@ void PBHVlasovLevel::specific_post_timestep()
     // far-field reference for the lapse driver: the most negative K on the coarse level (FLRW region)
     amr->K_far = state_new.min(c_K);
     amr->K_far_time = time;
+    if (!amr->gauge_active && time >= ip_step.gauge_on_time)
+    {
+        // end of the geodesic phase: reference profile of the lapse condition from the current slice
+        const amrex::Real K_far_now = amr->K_far;
+        for (int lev = 0; lev <= amr->finestLevel(); ++lev)
+        {
+            amrex::MultiFab &st = amr->getLevel(lev).get_new_data(state_index);
+            const auto &sa = st.arrays();
+            amrex::ParallelFor(st, [=] AMREX_GPU_DEVICE(int b, int i, int j, int k) {
+                sa[b](i, j, k, c_fref) = sa[b](i, j, k, c_K) / K_far_now;
+            });
+        }
+        amrex::Gpu::streamSynchronize();
+        amr->gauge_active = true;
+        amrex::Print() << "PBHVlasov: gauge switched on at t = " << time << " (fref = K / K_far, K_far = " << K_far_now
+                       << ")\n";
+    }
     const amrex::Real chi_mean = state_new.sum(c_chi) / Geom().Domain().numPts();
     const amrex::Real K_mean = state_new.sum(c_K) / Geom().Domain().numPts();
     // physical energy density = densitised grid source times chi^{3/2}
@@ -1146,6 +1180,11 @@ void PBHVlasovLevel::specific_post_restart()
         amr->deposit_all_levels(state_index);
         amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K);
         amr->K_far_time = get_state_data(state_index).curTime();
+        {
+            InitParams ipr;
+            ipr.read();
+            amr->gauge_active = !(ipr.gauge_on_time > 0.0) || get_state_data(state_index).curTime() >= ipr.gauge_on_time;
+        }
         amr->dt_scale = 1.0 / std::sqrt(amr->getLevel(0).get_new_data(state_index).max(c_chi));
     }
 }
