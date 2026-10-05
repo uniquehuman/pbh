@@ -701,6 +701,7 @@ void PBHVlasovLevel::specific_post_init()
                        << amr->finestLevel() + 1 << " levels, total rest mass " << amr->particles.total_mass(0) << "\n";
         amr->deposit_all_levels(state_index);
         amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K); // far-field reference before the first RHS
+        amr->K_far_time = get_state_data(state_index).curTime();
     }
 }
 
@@ -831,7 +832,7 @@ void PBHVlasovLevel::specific_advance()
     deposit_particles();
 }
 
-void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab &a_rhs, const amrex::Real /*a_time*/)
+void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab &a_rhs, const amrex::Real a_time)
 {
     BL_PROFILE("PBHVlasovLevel::specific_eval_rhs()");
     const auto &soln_arrays = a_soln.arrays();
@@ -846,7 +847,16 @@ void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab 
     if (m_evolution_spatial_derivative_order != 4)
         amrex::Abort("PBHVlasov: spatial_derivative_order must be 4");
     const CCZ4RHSWithMatter<Matter<FourthOrderDerivatives>, FourthOrderDerivatives> ccz4_rhs(Geom().CellSize(0));
-    PBHGaugeTeclyn<FourthOrderDerivatives> gauge(Geom().CellSize(0), get_vlasov_amr_ptr()->K_far);
+    // far-field K at the stage time: dust FLRW from the last measurement, dK/dt = K^2/2 (otherwise the reference lags
+    // by up to one coarse step and the far-field lapse drifts below 1)
+    amrex::Real K_ref = get_vlasov_amr_ptr()->K_far;
+    {
+        int k_far_extrap = 1;
+        GRParmParse("pbh_vlasov").query("k_far_extrap", k_far_extrap);
+        if (k_far_extrap)
+            K_ref /= 1.0 - 0.5 * K_ref * (a_time - get_vlasov_amr_ptr()->K_far_time);
+    }
+    PBHGaugeTeclyn<FourthOrderDerivatives> gauge(Geom().CellSize(0), K_ref);
     // expansion-aware step: Kreiss-Oliger coefficient and Gamma-driver speed follow the coordinate light speed
     InitParams ip_rhs;
     ip_rhs.read();
@@ -907,10 +917,21 @@ void PBHVlasovLevel::specific_post_timestep()
     amrex::MultiFab &state_new = get_new_data(state_index);
     // far-field reference for the lapse driver: the most negative K on the coarse level (FLRW region)
     amr->K_far = state_new.min(c_K);
+    amr->K_far_time = time;
     const amrex::Real chi_mean = state_new.sum(c_chi) / Geom().Domain().numPts();
     const amrex::Real K_mean = state_new.sum(c_K) / Geom().Domain().numPts();
-    const amrex::Real rho_mean = state_new.sum(c_rho_p) / Geom().Domain().numPts();
-    const amrex::Real rho_max = state_new.max(c_rho_p);
+    // physical energy density = densitised grid source times chi^{3/2}
+    amrex::MultiFab rho_phys(state_new.boxArray(), state_new.DistributionMap(), 1, 0);
+    {
+        const auto &sa = state_new.const_arrays();
+        const auto &ra = rho_phys.arrays();
+        amrex::ParallelFor(rho_phys, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
+            ra[box_no](ix, iy, iz) = sa[box_no](ix, iy, iz, c_rho_p) * std::pow(sa[box_no](ix, iy, iz, c_chi), 1.5);
+        });
+        amrex::Gpu::streamSynchronize();
+    }
+    const amrex::Real rho_mean = rho_phys.sum(0) / Geom().Domain().numPts();
+    const amrex::Real rho_max = rho_phys.max(0);
     const amrex::Real chi_min = state_new.min(c_chi);
     const amrex::Real lapse_min = state_new.min(c_lapse);
     const amrex::Real mass = amr->particles.total_mass(0);
@@ -997,6 +1018,7 @@ void PBHVlasovLevel::specific_post_restart()
     {
         amr->deposit_all_levels(state_index);
         amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K);
+        amr->K_far_time = get_state_data(state_index).curTime();
         amr->dt_scale = 1.0 / std::sqrt(amr->getLevel(0).get_new_data(state_index).max(c_chi));
     }
 }

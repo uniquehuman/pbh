@@ -56,9 +56,13 @@ template <class deriv_t = FourthOrderDerivatives> class ParticleMatter
         // keep the CellData alive: CCZ4Vars stores a reference to it
         const amrex::CellData<const amrex::Real> &cd = state.cellData(ix, iy, iz);
         const Vars vars(cd);
-        out.rho = vars.rho_p();
-        FOR (i) { out.j(i) = vars.S_i(i); }
-        FOR (i, j) { out.S(i, j) = vars.S_ij(i, j); }
+        // the grid carries the coordinate (densitised) sources sum m Gamma W / dV etc.; the physical ones need
+        // 1/sqrt(gamma) = chi^{3/2} of the current state, so that within a step (all RK stages) the sources follow the
+        // expansion of the volume element instead of lagging by one step
+        const amrex::Real sg = std::pow(vars.chi(), 1.5);
+        out.rho = sg * vars.rho_p();
+        FOR (i) { out.j(i) = sg * vars.S_i(i); }
+        FOR (i, j) { out.S(i, j) = sg * vars.S_ij(i, j); }
         out.trS = vars.chi() * TensorAlgebra::compute_trace(out.S, h_UU);
         return out;
     }

@@ -548,7 +548,8 @@ void VlasovParticles::deposit_level(int lev, const amrex::Vector<amrex::MultiFab
     const auto &st_arrays = st.arrays();
     amrex::ParallelFor(st, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
         const amrex::Real chi = st_arrays[box_no](ix, iy, iz, c_chi);
-        const amrex::Real inv = std::pow(chi, 1.5) / dV; // 1/(sqrt(gamma) dV)
+        const amrex::Real inv = 1.0 / dV; // coordinate densities; ParticleMatter multiplies by chi^{3/2} = 1/sqrt(gamma)
+        amrex::ignore_unused(chi);
         for (int c = 0; c < NDEP; ++c)
             st_arrays[box_no](ix, iy, iz, c_rho_p + c) = dep_arrays[box_no](ix, iy, iz, c) * inv;
     });
