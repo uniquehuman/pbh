@@ -21,6 +21,9 @@ class PBHVlasovLevel : public GRAmrLevel
     void initData() override;
     void specific_post_init() override;
     void specific_advance() override;
+    //! pbh_vlasov.strang = 1: half particle step and deposit before the grid update (sources at mid-step), the second
+    //! half in specific_advance(); second order in time when the sources change by per cents per step (early start)
+    amrex::Real advance(amrex::Real time, amrex::Real dt, int iteration, int ncycle) override;
     void specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab &a_rhs, amrex::Real a_time) override;
     void specific_update_ode(amrex::MultiFab &a_soln) override;
     void specific_post_timestep() override;

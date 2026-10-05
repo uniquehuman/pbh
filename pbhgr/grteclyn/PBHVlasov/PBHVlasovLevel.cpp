@@ -901,6 +901,23 @@ void PBHVlasovLevel::deposit_particles()
     get_vlasov_amr_ptr()->deposit_one_level(Level(), state_index);
 }
 
+amrex::Real PBHVlasovLevel::advance(amrex::Real time, amrex::Real dt, int iteration, int ncycle)
+{
+    auto *amr = get_vlasov_amr_ptr();
+    int strang = 0;
+    GRParmParse("pbh_vlasov").query("strang", strang);
+    if (strang && amr->particles_ready)
+    {
+        BL_PROFILE("PBHVlasovLevel::advance() half push");
+        amrex::MultiFab &state_new = get_new_data(state_index);
+        amrex::MultiFab state_gh(state_new.boxArray(), state_new.DistributionMap(), state_new.nComp(), 3);
+        FillPatch(*this, state_gh, 3, time, state_index, 0, state_new.nComp());
+        amr->particles.push(Level(), 0.5 * dt, state_gh, Geom());
+        deposit_particles(); // sources at mid-step for all RK stages of the grid update
+    }
+    return GRAmrLevel::advance(time, dt, iteration, ncycle);
+}
+
 void PBHVlasovLevel::specific_advance()
 {
     BL_PROFILE("PBHVlasovLevel::specific_advance()");
@@ -920,9 +937,25 @@ void PBHVlasovLevel::specific_advance()
         return;
     const amrex::Real t_new = get_state_data(state_index).curTime();
     const amrex::Real dt = get_gr_amr_ptr()->dtLevel(Level());
+    int strang = 0, push_centred = 1;
+    GRParmParse("pbh_vlasov").query("strang", strang);
+    GRParmParse("pbh_vlasov").query("push_centred", push_centred);
     amrex::MultiFab state_gh(state_new.boxArray(), state_new.DistributionMap(), state_new.nComp(), 3);
-    FillPatch(*this, state_gh, 3, t_new, state_index, 0, state_new.nComp());
-    amr->particles.push(Level(), dt, state_gh, Geom());
+    if (strang)
+    {
+        // second half of the particle step with the fields at the end of the step (the first half and the mid-step
+        // deposit were done in advance() before the grid update)
+        FillPatch(*this, state_gh, 3, t_new, state_index, 0, state_new.nComp());
+        amr->particles.push(Level(), 0.5 * dt, state_gh, Geom());
+    }
+    else
+    {
+        // one push per step with the fields at the middle of the step (linear in time between the old and the new
+        // state); pbh_vlasov.push_centred = 0 restores the end-of-step fields of the first runs
+        const amrex::Real t_push = push_centred ? t_new - 0.5 * dt : t_new;
+        FillPatch(*this, state_gh, 3, t_push, state_index, 0, state_new.nComp());
+        amr->particles.push(Level(), dt, state_gh, Geom());
+    }
     deposit_particles();
 }
 
