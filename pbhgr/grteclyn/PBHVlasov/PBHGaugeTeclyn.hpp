@@ -16,6 +16,9 @@ template <class deriv_t = FourthOrderDerivatives> class PBHGaugeTeclyn : public 
     using base_t = IntegratedMovingPunctureGauge<deriv_t>;
     using params_t = typename base_t::params_t;
     PBHGaugeTeclyn(amrex::Real a_dx, amrex::Real a_K_far) : base_t(a_dx), m_K_far(a_K_far) {}
+    //! the Gamma-driver's gauge speed is sqrt(shift_Gamma_coeff) in coordinate units whatever chi is; with the
+    //! expansion-aware time step (coordinate light speed sqrt(chi_far)) the coefficient is scaled by chi_far
+    void scale_shift_Gamma(amrex::Real a_factor) { this->m_params.shift_Gamma_coeff *= a_factor; }
 
     AMREX_GPU_DEVICE AMREX_FORCE_INLINE void calculate_rhs(int ix, int iy, int iz, const amrex::Array4<amrex::Real> &rhs,
                                                            const amrex::Array4<const amrex::Real> &state) const

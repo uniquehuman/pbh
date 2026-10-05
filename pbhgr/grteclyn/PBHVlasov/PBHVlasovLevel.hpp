@@ -27,9 +27,20 @@ class PBHVlasovLevel : public GRAmrLevel
     void specific_post_checkpoint(const std::string &a_dir, std::ostream &os) override;
     void specific_post_restart() override;
     void tag_cells(amrex::TagBoxArray &a_tag_box_array, amrex::Real a_regrid_threshold) final;
+    //! expansion-aware time step with adaptive subcycling (pbh_vlasov.dt_mode = 1); otherwise GRTeclyn's fixed step
+    void computeInitialDt(int finest_level, int sub_cycle, amrex::Vector<int> &n_cycle,
+                          const amrex::Vector<amrex::IntVect> &ref_ratio, amrex::Vector<amrex::Real> &dt_level,
+                          amrex::Real stop_time) override;
+    void computeNewDt(int finest_level, int sub_cycle, amrex::Vector<int> &n_cycle,
+                      const amrex::Vector<amrex::IntVect> &ref_ratio, amrex::Vector<amrex::Real> &dt_min,
+                      amrex::Vector<amrex::Real> &dt_level, amrex::Real stop_time, int post_regrid_flag) override;
+    //! `yoo` mode: energy and momentum density from the vacuum constraints of this level's data, then the level's
+    //! particles from them (called for every level once the lattice exists)
+    void init_particles_from_constraints();
 
   private:
     void deposit_particles();
+    void set_time_steps(int finest_level, amrex::Vector<int> &n_cycle, amrex::Vector<amrex::Real> &dt_level);
     void load_table();
     // tabulated spherical initial data (isotropic radius): chi, K, A^r_r, rho, u_r
     std::vector<amrex::Real> m_tab_r, m_tab_chi, m_tab_K, m_tab_Arr, m_tab_rho, m_tab_ur;

@@ -32,6 +32,8 @@ class PBHVlasovAmr : public GRAmr
     void deposit_one_level(int lev, int state_index) { particles.deposit_level(lev, states(state_index), geoms()); }
     // last apparent-horizon result (for the guess radius of the next search)
     double ah_last_radius{-1.0};
+    // 1 / sqrt(max chi on level 0): inverse coordinate light speed of the far field (expansion-aware time step)
+    amrex::Real dt_scale{1.0};
     void average_down_sources(int state_index)
     {
         for (int lev = finestLevel(); lev >= 1; --lev)
@@ -44,6 +46,7 @@ class PBHVlasovAmr : public GRAmr
     ParticleInterpolator<1> K_interpolator;
     ParticleInterpolator<1> lapse_interpolator;
     ParticleInterpolator<14> theta_interpolator; // chi, h~_ij, K, A~_ij along the rays
+    ParticleInterpolator<35> sphere_interpolator; // the same plus d_k chi, d_k h~_ij on the coordinate spheres
     double ah_ray_radius{-1.0};                  // horizon radius from the ray diagnostic (-1 = none)
 
     explicit PBHVlasovAmr(amrex::LevelBld *a_level_bld) : GRAmr(a_level_bld) {}
@@ -56,6 +59,7 @@ class PBHVlasovAmr : public GRAmr
         K_interpolator.setup(this);
         lapse_interpolator.setup(this);
         theta_interpolator.setup(this);
+        sphere_interpolator.setup(this);
     }
 };
 

@@ -1,5 +1,7 @@
 /* PBHVlasov example for GRTeclyn (pbhgr project, stage 2). Based on Examples/ScalarField (GRTeclyn fd76177). */
 #include "PBHVlasovLevel.hpp"
+#include <algorithm>
+#include <array>
 #include <filesystem>
 #include "AlgebraicConstraintsEnforcer.hpp"
 #include "CCZ4RHSWithMatter.hpp"
@@ -10,6 +12,7 @@
 #include "GRParmParse.hpp"
 #include "GammaCalculator.hpp"
 #include "IntegratedMovingPunctureGauge.hpp"
+#include "Interval.hpp"
 #include "PBHGaugeTeclyn.hpp"
 #include "PBHAHFinder.hpp"
 #include "LineExtraction.hpp"
@@ -44,6 +47,14 @@ struct InitParams
     amrex::Real tau0{0.0};    // initial proper time of the particles (the LTB time of the initial slice)
     amrex::Real sigma{0.0};   // warm particles: 1D velocity dispersion at injection (table columns 7-8 scale it to t_0)
     long sigma_seed{12345};
+    // yoo mode: long-wavelength CMC data at a_i = 1 (H0 = H_i) for zeta = mu exp(-k^2 r^2/6) [1 + (k^2/6)(p (2X^2 - Y^2
+    // - Z^2) + 3 e (Y^2 - Z^2))]; grid coordinates x' = a_ref x (comoving x in units of 1/k)
+    amrex::Real mu{0.0}, ell_e{0.0}, ell_p{0.0}, kp{1.0}, a_ref{1.0};
+    int sphere_diag{0};       // expansion of the coordinate spheres on sphere_ndir directions (non-spherical runs)
+    int sphere_ndir{96}, sphere_nr{160};
+    amrex::Real sphere_dr{0.75}; // radial spacing in finest-level cells
+    int dt_mode{0};           // 0: fixed dt = dt_multiplier dx; 1: expansion-aware step with adaptive subcycling
+    amrex::Real dt_frac{0.03}; // dt_mode 1: coarse step <= dt_frac (t + tau0)
     void read()
     {
         GRParmParse pp("pbh_vlasov");
@@ -65,8 +76,72 @@ struct InitParams
         pp.query("tau0", tau0);
         pp.query("sigma", sigma);
         pp.query("sigma_seed", sigma_seed);
+        pp.query("mu", mu);
+        pp.query("ell_e", ell_e);
+        pp.query("ell_p", ell_p);
+        pp.query("kp", kp);
+        pp.query("a_ref", a_ref);
+        pp.query("sphere_diag", sphere_diag);
+        pp.query("sphere_ndir", sphere_ndir);
+        pp.query("sphere_nr", sphere_nr);
+        pp.query("sphere_dr", sphere_dr);
+        pp.query("dt_mode", dt_mode);
+        pp.query("dt_frac", dt_frac);
     }
 };
+
+// Long-wavelength CMC initial data of Yoo et al. 2026 (eqs. 3.4-3.11, profile 5.1) at a_i = 1 for comoving position
+// (X, Y, Z): conformal factor psi, conformal metric gt_ij = delta_ij - (4/5) p_ij / H_i^2 and At_ij = (2/5) p_ij / H_i
+// (K = -3 H_i); p_ij = Psi^-4 [-(2/Psi)(d_i d_j Psi - delta_ij lap Psi / 3) + (6/Psi^2)(d_i Psi d_j Psi - delta_ij
+// |d Psi|^2 / 3)], psi = Psi [1 + (2/9) lap Psi / (Psi^5 H_i^2)], Psi = exp(zeta / 2).
+struct YooData
+{
+    amrex::Real psi;
+    amrex::Real g[3][3], A[3][3];
+};
+AMREX_GPU_DEVICE inline YooData yoo_data(amrex::Real X, amrex::Real Y, amrex::Real Z, amrex::Real mu, amrex::Real e,
+                                         amrex::Real pp, amrex::Real k, amrex::Real Hi)
+{
+    const amrex::Real x[3] = {X, Y, Z};
+    const amrex::Real k2 = k * k, r2 = X * X + Y * Y + Z * Z;
+    const amrex::Real gs = std::exp(-k2 * r2 / 6.0);
+    const amrex::Real Q = 1.0 + (k2 / 6.0) * (pp * (2 * X * X - Y * Y - Z * Z) + 3.0 * e * (Y * Y - Z * Z));
+    const amrex::Real dQ[3] = {(k2 / 3.0) * 2.0 * pp * X, (k2 / 3.0) * (3.0 * e - pp) * Y, -(k2 / 3.0) * (3.0 * e + pp) * Z};
+    const amrex::Real ddQ[3] = {(k2 / 3.0) * 2.0 * pp, (k2 / 3.0) * (3.0 * e - pp), -(k2 / 3.0) * (3.0 * e + pp)};
+    amrex::Real dz[3], ddz[3][3];
+    for (int i = 0; i < 3; ++i)
+        dz[i] = mu * (-(k2 / 3.0) * x[i] * gs * Q + gs * dQ[i]);
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+        {
+            const amrex::Real ddg = ((i == j ? -(k2 / 3.0) : 0.0) + (k2 * k2 / 9.0) * x[i] * x[j]) * gs;
+            ddz[i][j] = mu * (ddg * Q - (k2 / 3.0) * gs * (x[i] * dQ[j] + x[j] * dQ[i]) + (i == j ? gs * ddQ[i] : 0.0));
+        }
+    const amrex::Real Psi = std::exp(0.5 * mu * gs * Q);
+    amrex::Real dP[3], ddP[3][3], lap = 0.0, grad2 = 0.0;
+    for (int i = 0; i < 3; ++i)
+    {
+        dP[i] = 0.5 * Psi * dz[i];
+        grad2 += dP[i] * dP[i];
+        for (int j = 0; j < 3; ++j)
+            ddP[i][j] = Psi * (0.5 * ddz[i][j] + 0.25 * dz[i] * dz[j]);
+        lap += ddP[i][i];
+    }
+    YooData D;
+    const amrex::Real Psi4 = Psi * Psi * Psi * Psi;
+    const amrex::Real q = -(4.0 / 3.0) * lap / (Psi4 * Psi);
+    D.psi = Psi * (1.0 - q / (6.0 * Hi * Hi));
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j)
+        {
+            const amrex::Real dl = (i == j) ? 1.0 : 0.0;
+            const amrex::Real pij = (-(2.0 / Psi) * (ddP[i][j] - dl * lap / 3.0) +
+                                     (6.0 / (Psi * Psi)) * (dP[i] * dP[j] - dl * grad2 / 3.0)) / Psi4;
+            D.g[i][j] = dl - 0.8 * pij / (Hi * Hi);
+            D.A[i][j] = 0.4 * pij / Hi;
+        }
+    return D;
+}
 
 // Spherical expansion along the six coordinate rays from the box centre, from the grid fields interpolated at
 // r_k = (k + 1/2) dr (apparent-horizon diagnostic for a nearly spherical configuration).  Along a ray with unit
@@ -189,6 +264,191 @@ void theta_ray_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex:
     amrex::ParallelDescriptor::Bcast(&amr->ah_ray_radius, 1, amrex::ParallelDescriptor::IOProcessorNumber());
 }
 
+// Expansion of the coordinate spheres r = const about the box centre (horizon diagnostic without symmetry).
+// With n_i = x_i / r, N = sqrt(gamma^{ij} n_i n_j), s^i = gamma^{ij} n_j / N (unit normal of the sphere):
+//   Theta = D_i s^i + K_ij s^i s^j - K = d_i s^i - (3/2) s^i d_i chi / chi + A~_ij s^i s^j / chi - (2/3) K,
+// area element sqrt(gamma) N r^2 dOmega = chi^{-3/2} N r^2 dOmega.  On sphere_ndir quasi-uniform directions and radii
+// r_k = (k + 1/2) dr the minimum, mean and maximum of Theta and the area are formed.  r_in = largest radius whose
+// sphere is trapped everywhere (max Theta <= 0: a horizon exists and encloses it); r_out = radius above which no
+// sphere has a trapped point (min Theta > 0).  M = sqrt(A / 16 pi).  Output: pbh_ah_spheres.dat, sphere_profiles/.
+// Reduces to the ray diagnostic in spherical symmetry; r_in replaces the ray radius for the tau statistics.
+void sphere_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real time, long step, const InitParams &ip,
+                       bool first_step)
+{
+    constexpr int NV = 14, NC = 35;
+    const int vcomp[NV] = {c_chi, c_h11, c_h12, c_h13, c_h22, c_h23, c_h33, c_K, c_A11, c_A12, c_A13, c_A22, c_A23, c_A33};
+    static constexpr int sym[3][3] = {{0, 1, 2}, {1, 3, 4}, {2, 4, 5}};
+    const int ndir = ip.sphere_ndir;
+    const amrex::Real dx_f = geom.CellSize(0) / (1 << amr->finestLevel());
+    const amrex::Real dr = ip.sphere_dr * dx_f;
+    const auto plo = geom.ProbLoArray(), phi = geom.ProbHiArray();
+    const int nr = std::max(4, std::min(ip.sphere_nr, static_cast<int>(0.45 * (phi[0] - plo[0]) / dr)));
+    const amrex::Real c0[3] = {0.5 * (plo[0] + phi[0]), 0.5 * (plo[1] + phi[1]), 0.5 * (plo[2] + phi[2])};
+    const bool io = amrex::ParallelDescriptor::IOProcessor();
+    const int npts = io ? ndir * nr : 0;
+    // Fibonacci directions
+    std::vector<std::array<double, 3>> dirs(ndir);
+    for (int i = 0; i < ndir; ++i)
+    {
+        const double zz = 1.0 - (2.0 * i + 1.0) / ndir, rho = std::sqrt(std::max(0.0, 1.0 - zz * zz));
+        const double ph = i * M_PI * (3.0 - std::sqrt(5.0));
+        dirs[i] = {rho * std::cos(ph), rho * std::sin(ph), zz};
+    }
+    std::vector<amrex::ParticleReal> x(npts), y(npts), z(npts);
+    for (int i = 0; i < ndir && io; ++i)
+        for (int k = 0; k < nr; ++k)
+        {
+            const amrex::Real r = (k + 0.5) * dr;
+            x[i * nr + k] = c0[0] + r * dirs[i][0];
+            y[i * nr + k] = c0[1] + r * dirs[i][1];
+            z[i * nr + k] = c0[2] + r * dirs[i][2];
+        }
+    std::vector<amrex::ParticleReal> data(static_cast<size_t>(npts) * NC, 0.0);
+    InterpolationQueryParticle query(npts);
+    query.setCoords(0, x.data()).setCoords(1, y.data()).setCoords(2, z.data());
+    for (int c = 0; c < NV; ++c)
+        query.addComp(vcomp[c], data.data() + static_cast<size_t>(c) * npts);
+    for (int f = 0; f < 7; ++f) // first derivatives of chi and h~_ab: slot NV + 3 f + d
+        for (int d = 0; d < 3; ++d)
+        {
+            Derivative dd;
+            dd[d] = 1;
+            query.addComp(vcomp[f], data.data() + static_cast<size_t>(NV + 3 * f + d) * npts, VariableType::state,
+                          BCParity::undefined, dd);
+        }
+    amr->sphere_interpolator.interp(query, false); // collective
+    double r_in = -1.0;
+    if (io)
+    {
+        std::vector<double> th_min(nr, 1e300), th_max(nr, -1e300), th_mean(nr, 0.0), area(nr, 0.0);
+        for (int i = 0; i < ndir; ++i)
+            for (int k = 0; k < nr; ++k)
+            {
+                const size_t idx = static_cast<size_t>(i) * nr + k;
+                auto g = [&](int c) { return static_cast<double>(data[static_cast<size_t>(c) * npts + idx]); };
+                const double chi = g(0), Kt = g(7), r = (k + 0.5) * dr;
+                double h[3][3], A[3][3], dh[3][3][3], dchi[3];
+                for (int a = 0; a < 3; ++a)
+                    for (int b = 0; b < 3; ++b)
+                    {
+                        h[a][b] = g(1 + sym[a][b]);
+                        A[a][b] = g(8 + sym[a][b]);
+                        for (int d = 0; d < 3; ++d)
+                            dh[d][a][b] = g(NV + 3 * (1 + sym[a][b]) + d);
+                    }
+                for (int d = 0; d < 3; ++d)
+                    dchi[d] = g(NV + d);
+                const double det = h[0][0] * (h[1][1] * h[2][2] - h[1][2] * h[2][1]) -
+                                   h[0][1] * (h[1][0] * h[2][2] - h[1][2] * h[2][0]) +
+                                   h[0][2] * (h[1][0] * h[2][1] - h[1][1] * h[2][0]);
+                double hU[3][3];
+                hU[0][0] = (h[1][1] * h[2][2] - h[1][2] * h[2][1]) / det;
+                hU[0][1] = (h[0][2] * h[2][1] - h[0][1] * h[2][2]) / det;
+                hU[0][2] = (h[0][1] * h[1][2] - h[0][2] * h[1][1]) / det;
+                hU[1][1] = (h[0][0] * h[2][2] - h[0][2] * h[2][0]) / det;
+                hU[1][2] = (h[0][2] * h[1][0] - h[0][0] * h[1][2]) / det;
+                hU[2][2] = (h[0][0] * h[1][1] - h[0][1] * h[1][0]) / det;
+                hU[1][0] = hU[0][1]; hU[2][0] = hU[0][2]; hU[2][1] = hU[1][2];
+                const double *n = dirs[i].data();
+                double gU[3][3], dgU[3][3][3]; // dgU[k][i][j] = d_k gamma^{ij}
+                for (int a = 0; a < 3; ++a)
+                    for (int b = 0; b < 3; ++b)
+                    {
+                        gU[a][b] = chi * hU[a][b];
+                        for (int d = 0; d < 3; ++d)
+                        {
+                            double dhU = 0.0;
+                            for (int l = 0; l < 3; ++l)
+                                for (int m = 0; m < 3; ++m)
+                                    dhU -= hU[a][l] * hU[b][m] * dh[d][l][m];
+                            dgU[d][a][b] = dchi[d] * hU[a][b] + chi * dhU;
+                        }
+                    }
+                double gn[3] = {0, 0, 0}, N2 = 0.0; // gamma^{ij} n_j and N^2
+                for (int a = 0; a < 3; ++a)
+                {
+                    for (int b = 0; b < 3; ++b)
+                        gn[a] += gU[a][b] * n[b];
+                    N2 += gn[a] * n[a];
+                }
+                const double N = std::sqrt(N2);
+                double div = 0.0;
+                for (int a = 0; a < 3; ++a)
+                {
+                    double dN = 0.0; // d_a N
+                    for (int b = 0; b < 3; ++b)
+                    {
+                        div += dgU[a][a][b] * n[b] / N;                                   // (d_i gamma^{ij}) n_j / N
+                        div += gU[a][b] * ((a == b ? 1.0 : 0.0) - n[a] * n[b]) / (r * N); // gamma^{ij} d_i n_j / N
+                        for (int c = 0; c < 3; ++c)
+                            dN += dgU[a][b][c] * n[b] * n[c];
+                        dN += 2.0 * gn[b] * ((a == b ? 1.0 : 0.0) - n[a] * n[b]) / r;
+                    }
+                    dN /= 2.0 * N;
+                    div -= gn[a] * dN / N2;
+                }
+                double Ass = 0.0, sdchi = 0.0;
+                for (int a = 0; a < 3; ++a)
+                {
+                    sdchi += gn[a] / N * dchi[a];
+                    for (int b = 0; b < 3; ++b)
+                        Ass += A[a][b] * gn[a] * gn[b] / N2;
+                }
+                const double Theta = div - 1.5 * sdchi / chi + Ass / chi - 2.0 * Kt / 3.0;
+                th_min[k] = std::min(th_min[k], Theta);
+                th_max[k] = std::max(th_max[k], Theta);
+                th_mean[k] += Theta / ndir;
+                area[k] += 4.0 * M_PI * r * r / ndir * std::pow(chi, -1.5) * N;
+            }
+        auto mass = [&](int k) { return std::sqrt(area[k] / (16.0 * M_PI)); };
+        // r_in: outermost zero of max Theta below which the spheres are trapped; r_out: innermost radius of the
+        // untrapped exterior
+        int kin = -1, kout = -1;
+        for (int k = nr - 2; k >= 1; --k)
+            if (th_max[k] <= 0.0 && th_max[k + 1] > 0.0 && th_max[k - 1] <= 0.0)
+            {
+                kin = k;
+                break;
+            }
+        for (int k = nr - 1; k >= 0 && th_min[k] > 0.0; --k)
+            kout = k;
+        double R_in = 0, M_in = 0, r_out = -1.0, M_out = 0, spread = 0;
+        if (kin >= 0)
+        {
+            const double f = -th_max[kin] / (th_max[kin + 1] - th_max[kin]);
+            r_in = (kin + 0.5 + f) * dr;
+            M_in = mass(kin) + f * (mass(kin + 1) - mass(kin));
+            R_in = 2.0 * M_in;
+            spread = th_max[kin] - th_min[kin];
+        }
+        if (kout >= 1 && kout < nr - 1)
+        {
+            const double f = (th_min[kout - 1] < 0.0) ? th_min[kout] / (th_min[kout] - th_min[kout - 1]) : 0.0;
+            r_out = (kout + 0.5 - f) * dr;
+            M_out = mass(kout) - f * (mass(kout) - mass(kout - 1));
+        }
+        std::ofstream out("pbh_ah_spheres.dat", first_step ? std::ios::out : std::ios::app);
+        if (first_step)
+            out << "# time r_in R_in=2M_in M_in r_out M_out Theta_spread(r_in)  (r_in: all-trapped sphere, r_out: no "
+                   "trapped point outside)\n";
+        out.precision(10);
+        out << time << " " << r_in << " " << R_in << " " << M_in << " " << r_out << " " << M_out << " " << spread << "\n";
+        if (ip.theta_profile_interval > 0 && step % ip.theta_profile_interval == 0)
+        {
+            std::filesystem::create_directory("sphere_profiles");
+            std::ofstream pf("sphere_profiles/sph_" + std::to_string(step) + ".dat");
+            pf.precision(8);
+            pf << "# time " << time << "\n# r Theta_min Theta_mean Theta_max area M=sqrt(A/16pi)\n";
+            for (int k = 0; k < nr; ++k)
+                pf << (k + 0.5) * dr << " " << th_min[k] << " " << th_mean[k] << " " << th_max[k] << " " << area[k] << " "
+                   << mass(k) << "\n";
+        }
+        if (r_in > 0.0)
+            amr->ah_ray_radius = r_in;
+    }
+    amrex::ParallelDescriptor::Bcast(&amr->ah_ray_radius, 1, amrex::ParallelDescriptor::IOProcessorNumber());
+}
+
 // proper time of the matter at the ray horizon (shell |r - r_AH| < max(dx_f, 0.05 r_AH)), inside it and in the core
 // (r < 2 dx_f): pbh_ah_tau.dat
 void tau_diagnostic(PBHVlasovAmr *amr, const amrex::Geometry &geom, amrex::Real time, bool first_step, long step,
@@ -307,6 +567,35 @@ void PBHVlasovLevel::initData()
             cell[c_K] = K0; cell[c_lapse] = 1.0; cell[c_fref] = 1.0;
         });
     }
+    else if (ip.mode == "yoo")
+    {
+        const amrex::Real mu = ip.mu, ee = ip.ell_e, ep = ip.ell_p, kp = ip.kp, Hi = ip.H0, aref = ip.a_ref;
+        const amrex::Real Lb[3] = {phi[0] - plo[0], phi[1] - plo[1], phi[2] - plo[2]};
+        amrex::ParallelFor(state_new, state_new.nGrowVect(), [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
+            const amrex::CellData<amrex::Real> cell = state_arrays[box_no].cellData(ix, iy, iz);
+            for (int c = 0; c < cell.nComp(); ++c)
+                cell[c] = 0.0;
+            // comoving position relative to the centre (minimum image for the ghost cells of the periodic box)
+            amrex::Real xp[3] = {plo[0] + (ix + 0.5) * dx[0] - cx, plo[1] + (iy + 0.5) * dx[1] - cy,
+                                 plo[2] + (iz + 0.5) * dx[2] - cz};
+            for (int d = 0; d < 3; ++d)
+            {
+                if (xp[d] > 0.5 * Lb[d]) xp[d] -= Lb[d];
+                if (xp[d] < -0.5 * Lb[d]) xp[d] += Lb[d];
+            }
+            const YooData D = yoo_data(xp[0] / aref, xp[1] / aref, xp[2] / aref, mu, ee, ep, kp, Hi);
+            const amrex::Real det = D.g[0][0] * (D.g[1][1] * D.g[2][2] - D.g[1][2] * D.g[2][1]) -
+                                    D.g[0][1] * (D.g[1][0] * D.g[2][2] - D.g[1][2] * D.g[2][0]) +
+                                    D.g[0][2] * (D.g[1][0] * D.g[2][1] - D.g[1][1] * D.g[2][0]);
+            const amrex::Real d13 = std::cbrt(det), psi4 = D.psi * D.psi * D.psi * D.psi;
+            cell[c_chi] = aref * aref / (psi4 * d13);
+            cell[c_h11] = D.g[0][0] / d13; cell[c_h12] = D.g[0][1] / d13; cell[c_h13] = D.g[0][2] / d13;
+            cell[c_h22] = D.g[1][1] / d13; cell[c_h23] = D.g[1][2] / d13; cell[c_h33] = D.g[2][2] / d13;
+            cell[c_A11] = D.A[0][0] / d13; cell[c_A12] = D.A[0][1] / d13; cell[c_A13] = D.A[0][2] / d13;
+            cell[c_A22] = D.A[1][1] / d13; cell[c_A23] = D.A[1][2] / d13; cell[c_A33] = D.A[2][2] / d13;
+            cell[c_K] = -3.0 * Hi; cell[c_lapse] = 1.0; cell[c_fref] = 1.0;
+        });
+    }
     else
     {
         load_table();
@@ -384,6 +673,12 @@ void PBHVlasovLevel::specific_post_init()
             const amrex::Real rho = 3.0 * ip.H0 * ip.H0 / (8.0 * M_PI);
             amr->particles.init_uniform(geom0, rho, ip.n_per_dir);
         }
+        else if (ip.mode == "yoo")
+        {
+            amr->particles.init_lattice(geom0, ip.n_per_dir);
+            for (int lev = 0; lev <= amr->finestLevel(); ++lev)
+                dynamic_cast<PBHVlasovLevel &>(amr->getLevel(lev)).init_particles_from_constraints();
+        }
         else
         {
             load_table();
@@ -406,6 +701,103 @@ void PBHVlasovLevel::specific_post_init()
                        << amr->finestLevel() + 1 << " levels, total rest mass " << amr->particles.total_mass(0) << "\n";
         amr->deposit_all_levels(state_index);
         amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K); // far-field reference before the first RHS
+    }
+}
+
+void PBHVlasovLevel::init_particles_from_constraints()
+{
+    BL_PROFILE("PBHVlasovLevel::init_particles_from_constraints()");
+    amrex::MultiFab &state_new = get_new_data(state_index);
+    const amrex::Real time = get_state_data(state_index).curTime();
+    amrex::MultiFab state_gh(state_new.boxArray(), state_new.DistributionMap(), state_new.nComp(), 3);
+    FillPatch(*this, state_gh, 3, time, state_index, 0, state_new.nComp());
+    // vacuum constraints on the valid cells grown by one: E = Ham / 16 pi, J_i = Mom_i / 8 pi
+    amrex::MultiFab con(state_new.boxArray(), state_new.DistributionMap(), 4, 1);
+    amrex::MultiFab fld(state_new.boxArray(), state_new.DistributionMap(), 11, 1);
+    const Constraints constraints(Geom().CellSize(0), 0, Interval(1, 3));
+    const auto &gh = state_gh.const_arrays();
+    const auto &ca = con.arrays();
+    const auto &fa = fld.arrays();
+    amrex::ParallelFor(con, amrex::IntVect(1), [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
+        constraints(ix, iy, iz, ca[box_no], gh[box_no]);
+        fa[box_no](ix, iy, iz, 0) = ca[box_no](ix, iy, iz, 0) / (16.0 * M_PI);
+        for (int i = 0; i < 3; ++i)
+            fa[box_no](ix, iy, iz, 1 + i) = ca[box_no](ix, iy, iz, 1 + i) / (8.0 * M_PI);
+        fa[box_no](ix, iy, iz, 4) = gh[box_no](ix, iy, iz, c_chi);
+        const int hc[6] = {c_h11, c_h12, c_h13, c_h22, c_h23, c_h33};
+        for (int i = 0; i < 6; ++i)
+            fa[box_no](ix, iy, iz, 5 + i) = gh[box_no](ix, iy, iz, hc[i]);
+    });
+    amrex::Gpu::streamSynchronize();
+    get_vlasov_amr_ptr()->particles.set_from_fields(Level(), fld, Geom());
+    amrex::Print() << "PBHVlasov: level " << Level() << " particles from the constraints, E in [" << fld.min(0, 0) << ", "
+                   << fld.max(0, 0) << "], max |J| " << std::max({fld.norm0(1), fld.norm0(2), fld.norm0(3)}) << "\n";
+}
+
+// Expansion-aware time step: the coordinate light speed of the far field is sqrt(chi_max), so the coarse step is
+// dt_multiplier dx_0 / sqrt(chi_max), capped by dt_frac (t + tau0) for the accuracy of the background expansion.
+// A finer level takes its parent's step while that satisfies its own limit (n_cycle = 1), otherwise half of it.
+void PBHVlasovLevel::set_time_steps(int finest_level, amrex::Vector<int> &n_cycle, amrex::Vector<amrex::Real> &dt_level)
+{
+    InitParams ip;
+    ip.read();
+    GRParmParse pp;
+    amrex::Real mult{};
+    pp.get("evolution.dt_multiplier", mult);
+    auto *amr = get_vlasov_amr_ptr();
+    const amrex::Real time = get_state_data(state_index).curTime();
+    const amrex::Real chi_max = amr->getLevel(0).get_new_data(state_index).max(c_chi);
+    amr->dt_scale = 1.0 / std::sqrt(chi_max);
+    dt_level[0] = std::min(mult * parent->Geom(0).CellSize(0) * amr->dt_scale, ip.dt_frac * (time + ip.tau0));
+    n_cycle[0] = 1;
+    for (int l = 1; l <= finest_level; ++l)
+    {
+        const amrex::Real limit = mult * parent->Geom(l).CellSize(0) * amr->dt_scale;
+        if (dt_level[l - 1] <= limit * (1.0 + 1e-12))
+        {
+            n_cycle[l] = 1;
+            dt_level[l] = dt_level[l - 1];
+        }
+        else
+        {
+            n_cycle[l] = 2;
+            dt_level[l] = 0.5 * dt_level[l - 1];
+        }
+    }
+}
+
+void PBHVlasovLevel::computeInitialDt(int finest_level, int sub_cycle, amrex::Vector<int> &n_cycle,
+                                      const amrex::Vector<amrex::IntVect> &ref_ratio,
+                                      amrex::Vector<amrex::Real> &dt_level, amrex::Real stop_time)
+{
+    InitParams ip;
+    ip.read();
+    if (ip.dt_mode != 1)
+    {
+        GRAmrLevel::computeInitialDt(finest_level, sub_cycle, n_cycle, ref_ratio, dt_level, stop_time);
+        return;
+    }
+    if (Level() == 0)
+        set_time_steps(finest_level, n_cycle, dt_level);
+}
+
+void PBHVlasovLevel::computeNewDt(int finest_level, int sub_cycle, amrex::Vector<int> &n_cycle,
+                                  const amrex::Vector<amrex::IntVect> &ref_ratio, amrex::Vector<amrex::Real> &dt_min,
+                                  amrex::Vector<amrex::Real> &dt_level, amrex::Real stop_time, int post_regrid_flag)
+{
+    InitParams ip;
+    ip.read();
+    if (ip.dt_mode != 1)
+    {
+        GRAmrLevel::computeNewDt(finest_level, sub_cycle, n_cycle, ref_ratio, dt_min, dt_level, stop_time,
+                                 post_regrid_flag);
+        return;
+    }
+    if (Level() == 0)
+    {
+        set_time_steps(finest_level, n_cycle, dt_level);
+        for (int l = 0; l <= finest_level; ++l)
+            dt_min[l] = dt_level[l];
     }
 }
 
@@ -454,7 +846,19 @@ void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab 
     if (m_evolution_spatial_derivative_order != 4)
         amrex::Abort("PBHVlasov: spatial_derivative_order must be 4");
     const CCZ4RHSWithMatter<Matter<FourthOrderDerivatives>, FourthOrderDerivatives> ccz4_rhs(Geom().CellSize(0));
-    const PBHGaugeTeclyn<FourthOrderDerivatives> gauge(Geom().CellSize(0), get_vlasov_amr_ptr()->K_far);
+    PBHGaugeTeclyn<FourthOrderDerivatives> gauge(Geom().CellSize(0), get_vlasov_amr_ptr()->K_far);
+    // expansion-aware step: Kreiss-Oliger coefficient and Gamma-driver speed follow the coordinate light speed
+    InitParams ip_rhs;
+    ip_rhs.read();
+    amrex::Real sigma_ko{};
+    GRParmParse("evolution").get("sigma", sigma_ko);
+    if (ip_rhs.dt_mode == 1)
+    {
+        const amrex::Real c_far = 1.0 / get_vlasov_amr_ptr()->dt_scale; // sqrt(chi_max)
+        sigma_ko *= c_far;
+        gauge.scale_shift_Gamma(c_far * c_far);
+    }
+    const FourthOrderDerivatives diss_deriv(Geom().CellSize(0));
     amrex::ParallelFor(a_rhs, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz) {
         ccz4_rhs.compute_chi_and_h_ij(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
     });
@@ -465,7 +869,8 @@ void PBHVlasovLevel::specific_eval_rhs(amrex::MultiFab &a_soln, amrex::MultiFab 
         ccz4_rhs.add_emtensor_rhs(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
         gauge.calculate_rhs(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
         ccz4_rhs.add_matter_rhs(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
-        ccz4_rhs.apply_dissipation(ix, iy, iz, rhs_arrays[box_no], const_soln_arrays[box_no]);
+        diss_deriv.add_dissipation(ix, iy, iz, rhs_arrays[box_no].cellData(ix, iy, iz), const_soln_arrays[box_no],
+                                   sigma_ko, NUM_CCZ4_VARS);
         // no dissipation on the deposited sources (they are not evolved)
         for (int c = c_rho_p; c < NUM_VARS; ++c)
             rhs_arrays[box_no](ix, iy, iz, c) = 0.0;
@@ -490,9 +895,14 @@ void PBHVlasovLevel::specific_post_timestep()
     if (Level() != 0)
         return;
     const amrex::Real time = get_state_data(state_index).curTime();
-    const amrex::Real dt = get_gr_amr_ptr()->dtLevel(0);
+    // with the variable step the outputs are indexed by the coarse step count (dt = time / steps keeps the
+    // time / dt arithmetic of the extraction files and of the profile dumps)
+    InitParams ip_step;
+    ip_step.read();
+    const long nstep = parent->levelSteps(0);
+    const amrex::Real dt = (ip_step.dt_mode == 1) ? time / std::max<long>(nstep, 1) : get_gr_amr_ptr()->dtLevel(0);
     const amrex::Real restart_time = get_gr_amr_ptr()->get_restart_time();
-    const bool first_step = (time <= dt);
+    const bool first_step = (ip_step.dt_mode == 1) ? (nstep <= 1) : (time <= dt);
     auto *amr = get_vlasov_amr_ptr();
     amrex::MultiFab &state_new = get_new_data(state_index);
     // far-field reference for the lapse driver: the most negative K on the coarse level (FLRW region)
@@ -534,6 +944,8 @@ void PBHVlasovLevel::specific_post_timestep()
     if (ip.theta_rays)
     {
         theta_ray_diagnostic(amr, Geom(), time, step, ip, first_step);
+        if (ip.sphere_diag)
+            sphere_diagnostic(amr, Geom(), time, step, ip, first_step);
         tau_diagnostic(amr, Geom(), time, first_step, step, ip.theta_profile_interval);
     }
 
@@ -585,6 +997,7 @@ void PBHVlasovLevel::specific_post_restart()
     {
         amr->deposit_all_levels(state_index);
         amr->K_far = amr->getLevel(0).get_new_data(state_index).min(c_K);
+        amr->dt_scale = 1.0 / std::sqrt(amr->getLevel(0).get_new_data(state_index).max(c_chi));
     }
 }
 

@@ -76,6 +76,12 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     //! warm start: sigma is the 1D dispersion at injection, sr_tab/st_tab the radial/tangential ratios
     //! sigma(t_0)/sigma (table columns 7-8); velocities are a balanced set per lattice cell (see unit_velocity)
 
+    //! bare lattice: positions only, the coordinate sub-cell volume is parked in rdata(m) until set_from_fields()
+    void init_lattice(const amrex::Geometry &geom, int n_per_dir);
+    //! cold particles from grid fields on level lev (1 ghost cell; components E, J_1..3, chi, h11 h12 h13 h22 h23
+    //! h33, CIC-interpolated): v_i = J_i / E, Gamma = (1 - gamma^{ij} v_i v_j)^{-1/2}, u_i = Gamma v_i,
+    //! m = E sqrt(gamma) dV / Gamma
+    void set_from_fields(int lev, const amrex::MultiFab &fld, const amrex::Geometry &geom);
     //! deposit rho_p, S_i, S_ij on level lev (own particles + ghost copies of level lev-1 particles near the grids
     //! + copies of level lev+1 particles near their boundary, so that coarse-fine interfaces are consistent) into
     //! the matter components of a_states[lev]; a_states/a_geoms indexed by level

@@ -257,6 +257,16 @@ void VlasovParticles::init_uniform(const amrex::Geometry &geom, amrex::Real rho,
     });
 }
 
+void VlasovParticles::init_lattice(const amrex::Geometry &geom, int n_per_dir)
+{
+    make_lattice(*this, geom, n_per_dir, m_lattice_buffer,
+                 [=](ParticleType &p, amrex::Real dV_sub, std::uint64_t /*key*/, int /*sub*/) {
+        p.rdata(m) = dV_sub;
+        p.rdata(Gamma) = 1.0;
+        p.rdata(tau) = m_tau0;
+    });
+}
+
 void VlasovParticles::init_from_table(const amrex::Geometry &geom, const std::vector<amrex::Real> &r_tab,
                                       const std::vector<amrex::Real> &rho_tab, const std::vector<amrex::Real> &ur_tab,
                                       const std::vector<amrex::Real> &chi_tab, int n_per_dir,
@@ -392,7 +402,7 @@ void metric_fields(const amrex::MultiFab &a_state_gh, const amrex::Geometry &geo
 template <class P>
 AMREX_GPU_DEVICE int interp_fields_at(const P &p, amrex::Array4<const amrex::Real> const &arr,
                                       const amrex::GpuArray<amrex::Real, 3> &plo,
-                                      const amrex::GpuArray<amrex::Real, 3> &dxi, amrex::Real *f)
+                                      const amrex::GpuArray<amrex::Real, 3> &dxi, amrex::Real *f, int ncomp = NFLD)
 {
     const auto lo = amrex::lbound(arr);
     const auto hi = amrex::ubound(arr);
@@ -413,7 +423,7 @@ AMREX_GPU_DEVICE int interp_fields_at(const P &p, amrex::Array4<const amrex::Rea
         i1[d] = amrex::min(amrex::max(i + 1, alo[d]), ahi[d]);
     }
     const amrex::Real wx0 = 1.0 - w1[0], wy0 = 1.0 - w1[1], wz0 = 1.0 - w1[2];
-    for (int c = 0; c < NFLD; ++c)
+    for (int c = 0; c < ncomp; ++c)
         f[c] = wx0 * wy0 * wz0 * arr(i0[0], i0[1], i0[2], c) + w1[0] * wy0 * wz0 * arr(i1[0], i0[1], i0[2], c) +
                wx0 * w1[1] * wz0 * arr(i0[0], i1[1], i0[2], c) + w1[0] * w1[1] * wz0 * arr(i1[0], i1[1], i0[2], c) +
                wx0 * wy0 * w1[2] * arr(i0[0], i0[1], i1[2], c) + w1[0] * wy0 * w1[2] * arr(i1[0], i0[1], i1[2], c) +
@@ -429,6 +439,43 @@ AMREX_GPU_DEVICE inline bool finite_rhs(const amrex::Real *kx, const amrex::Real
     return true;
 }
 } // namespace
+
+void VlasovParticles::set_from_fields(int lev, const amrex::MultiFab &fld, const amrex::Geometry &geom)
+{
+    const auto plo = geom.ProbLoArray();
+    const auto dxi = geom.InvCellSizeArray();
+    amrex::MeshToParticle(*this, fld, lev,
+                          [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
+                              amrex::Real f[11];
+                              interp_fields_at(p, arr, plo, dxi, f, 11);
+                              const amrex::Real E = f[0], chi = f[4];
+                              const amrex::Real h[3][3] = {{f[5], f[6], f[7]}, {f[6], f[8], f[9]}, {f[7], f[9], f[10]}};
+                              const amrex::Real det = h[0][0] * (h[1][1] * h[2][2] - h[1][2] * h[2][1]) -
+                                                      h[0][1] * (h[1][0] * h[2][2] - h[1][2] * h[2][0]) +
+                                                      h[0][2] * (h[1][0] * h[2][1] - h[1][1] * h[2][0]);
+                              amrex::Real hUU[3][3];
+                              hUU[0][0] = (h[1][1] * h[2][2] - h[1][2] * h[2][1]) / det;
+                              hUU[0][1] = (h[0][2] * h[2][1] - h[0][1] * h[2][2]) / det;
+                              hUU[0][2] = (h[0][1] * h[1][2] - h[0][2] * h[1][1]) / det;
+                              hUU[1][1] = (h[0][0] * h[2][2] - h[0][2] * h[2][0]) / det;
+                              hUU[1][2] = (h[0][2] * h[1][0] - h[0][0] * h[1][2]) / det;
+                              hUU[2][2] = (h[0][0] * h[1][1] - h[0][1] * h[1][0]) / det;
+                              hUU[1][0] = hUU[0][1]; hUU[2][0] = hUU[0][2]; hUU[2][1] = hUU[1][2];
+                              const amrex::Real v[3] = {f[1] / E, f[2] / E, f[3] / E};
+                              amrex::Real v2 = 0.0;
+                              for (int i = 0; i < 3; ++i)
+                                  for (int j = 0; j < 3; ++j)
+                                      v2 += chi * hUU[i][j] * v[i] * v[j];
+                              const amrex::Real G = 1.0 / std::sqrt(1.0 - v2);
+                              const amrex::Real dV_sub = p.rdata(m);
+                              p.rdata(m) = E * std::pow(chi, -1.5) * dV_sub / G;
+                              p.rdata(u1) = G * v[0];
+                              p.rdata(u2) = G * v[1];
+                              p.rdata(u3) = G * v[2];
+                              p.rdata(Gamma) = G;
+                          });
+    amrex::Gpu::streamSynchronize();
+}
 
 void VlasovParticles::deposit_level(int lev, const amrex::Vector<amrex::MultiFab *> &a_states,
                                     const amrex::Vector<amrex::Geometry> &a_geoms)
