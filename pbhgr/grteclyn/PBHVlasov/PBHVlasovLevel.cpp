@@ -42,6 +42,8 @@ struct InitParams
     amrex::Real theta_ray_dr{0.5}; // spacing in finest-level cells
     int theta_profile_interval{20}; // coarse steps between full Theta(r) profile dumps (0 = never)
     amrex::Real tau0{0.0};    // initial proper time of the particles (the LTB time of the initial slice)
+    amrex::Real sigma{0.0};   // warm particles: 1D velocity dispersion at injection (table columns 7-8 scale it to t_0)
+    long sigma_seed{12345};
     void read()
     {
         GRParmParse pp("pbh_vlasov");
@@ -61,6 +63,8 @@ struct InitParams
         pp.query("theta_ray_dr", theta_ray_dr);
         pp.query("theta_profile_interval", theta_profile_interval);
         pp.query("tau0", tau0);
+        pp.query("sigma", sigma);
+        pp.query("sigma_seed", sigma_seed);
     }
 };
 
@@ -267,6 +271,11 @@ void PBHVlasovLevel::load_table()
             continue;
         m_tab_r.push_back(r); m_tab_chi.push_back(chi); m_tab_K.push_back(K); m_tab_Arr.push_back(Arr);
         m_tab_rho.push_back(rho); m_tab_ur.push_back(ur);
+        amrex::Real sr = 0.0, st = 0.0; // optional warm-start columns: sigma_r, sigma_t ratios at t_0
+        if (ss >> sr >> st)
+        {
+            m_tab_sr.push_back(sr); m_tab_st.push_back(st);
+        }
     }
     if (m_tab_r.size() < 4)
         amrex::Abort("PBHVlasov: table too short");
@@ -378,7 +387,19 @@ void PBHVlasovLevel::specific_post_init()
         else
         {
             load_table();
-            amr->particles.init_from_table(geom0, m_tab_r, m_tab_rho, m_tab_ur, m_tab_chi, ip.n_per_dir);
+            if (ip.sigma > 0.0 && m_tab_sr.size() != m_tab_r.size())
+                amrex::Abort("PBHVlasov: sigma > 0 needs the table columns sigma_r, sigma_t");
+            amr->particles.init_from_table(geom0, m_tab_r, m_tab_rho, m_tab_ur, m_tab_chi, ip.n_per_dir, m_tab_sr,
+                                           m_tab_st, ip.sigma, static_cast<std::uint64_t>(ip.sigma_seed));
+            if (ip.sigma > 0.0)
+            {
+                const auto plo0 = geom0.ProbLoArray(), phi0 = geom0.ProbHiArray();
+                const amrex::Real c0[3] = {0.5 * (plo0[0] + phi0[0]), 0.5 * (plo0[1] + phi0[1]), 0.5 * (plo0[2] + phi0[2])};
+                const amrex::Real dxf = geom0.CellSize(0) / (1 << amr->finestLevel());
+                const auto core = amr->particles.tau_in_shell(c0, 0.0, 16.0 * dxf);
+                amrex::Print() << "PBHVlasov: warm start, sigma = " << ip.sigma << " at injection; <Gamma> - 1 within 16 dx_f = "
+                               << core.gamma_mean - 1.0 << " (" << core.n << " particles)\n";
+            }
         }
         amr->particles_ready = true;
         amrex::Print() << "PBHVlasov: " << amr->particles.TotalNumberOfParticles() << " particles on "

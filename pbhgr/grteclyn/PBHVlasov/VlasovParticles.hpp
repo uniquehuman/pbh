@@ -13,6 +13,7 @@
 #define VLASOVPARTICLES_HPP_
 
 #include <AMReX_MultiFab.H>
+#include <cstdint>
 #include <AMReX_ParticleInterpolators.H>
 #include <AMReX_ParticleMesh.H>
 #include <AMReX_AmrParGDB.H>
@@ -69,7 +70,11 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     //! particles on a uniform lattice with mass = rho(r_p) sqrt(gamma) dV / nppc (sqrt(gamma) from chi(r))
     void init_from_table(const amrex::Geometry &geom, const std::vector<amrex::Real> &r_tab,
                          const std::vector<amrex::Real> &rho_tab, const std::vector<amrex::Real> &ur_tab,
-                         const std::vector<amrex::Real> &chi_tab, int n_per_dir);
+                         const std::vector<amrex::Real> &chi_tab, int n_per_dir,
+                         const std::vector<amrex::Real> &sr_tab = {}, const std::vector<amrex::Real> &st_tab = {},
+                         amrex::Real sigma = 0.0, std::uint64_t seed = 12345);
+    //! warm start: sigma is the 1D dispersion at injection, sr_tab/st_tab the radial/tangential ratios
+    //! sigma(t_0)/sigma (table columns 7-8); velocities are a balanced set per lattice cell (see unit_velocity)
 
     //! deposit rho_p, S_i, S_ij on level lev (own particles + ghost copies of level lev-1 particles near the grids
     //! + copies of level lev+1 particles near their boundary, so that coarse-fine interfaces are consistent) into

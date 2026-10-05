@@ -33,6 +33,7 @@ class PBHVlasovLevel : public GRAmrLevel
     void load_table();
     // tabulated spherical initial data (isotropic radius): chi, K, A^r_r, rho, u_r
     std::vector<amrex::Real> m_tab_r, m_tab_chi, m_tab_K, m_tab_Arr, m_tab_rho, m_tab_ur;
+    std::vector<amrex::Real> m_tab_sr, m_tab_st; // optional: sigma_r, sigma_t ratios (warm start)
     bool m_table_loaded{false};
 };
 

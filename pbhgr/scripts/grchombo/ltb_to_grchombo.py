@@ -134,6 +134,10 @@ def main():
     ap.add_argument("--ah", type=int, default=1)
     ap.add_argument("--ah_start", type=float, default=0.5, help="AH search from t_0 + ah_start * t_C(0)")
     ap.add_argument("--plot_every", type=float, default=0.05, help="plot interval in t_C(0)")
+    ap.add_argument("--sigma_inj", type=float, default=0.0,
+                    help="warm particles: 1D velocity dispersion (units of c) injected at t_inj as in the 1D code")
+    ap.add_argument("--t_inj", type=float, default=1.0, help="injection time in t_H")
+    ap.add_argument("--xdisp", type=float, default=2.0, help="dispersion only for shells with R/a < xdisp r_m at t_inj")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
 
@@ -154,6 +158,18 @@ def main():
     rho = mp / (4 * np.pi * R**2 * Rp)
     Krr = -Rdp / Rp; Kth = -Rd / R
     K = Krr + 2 * Kth; Arr = (2.0 / 3.0) * (Krr - Kth)
+    # --- warm particles: the 1D code injects an isotropic Maxwellian of width sigma_inj at t_inj (shell rest frame).
+    # Collisionless evolution to t_0 conserves R w_t and (R'/sqrt(1+2E)) w_r for small sigma, so the local dispersions
+    # at t_0 are sigma_t = sigma_inj R(t_inj)/R(t_0) and sigma_r = sigma_inj R'(t_inj)/R'(t_0); the table carries the ratios.
+    sig_r = np.zeros_like(r); sig_t = np.zeros_like(r)
+    if a.sigma_inj > 0:
+        t_inj = a.t_inj * tH
+        if not t_inj < t0:
+            raise SystemExit("t_inj must be earlier than t_0")
+        a_inj = (t_inj / ti) ** (2.0 / 3.0)
+        Rj = np.array([ltb.R(t_inj, ri) for ri in r]); Rjp = CubicSpline(r, Rj)(r, 1)
+        inside = Rj / a_inj < a.xdisp * rm
+        sig_t = np.where(inside, Rj / R, 0.0); sig_r = np.where(inside, Rjp / Rp, 0.0)
     # --- isotropic radius: ln(varrho/(a0 r)) = -int_r^inf [R'/(R sqrt(1+2E)) - 1/r'] dr'
     f = Rp / (R * np.sqrt(1 + 2 * E)) - 1.0 / r
     tail = cumulative_trapezoid(f[::-1], r[::-1], initial=0.0)[::-1]      # = -int_r^{rmax} f  (rmax -> inf)
@@ -178,9 +194,12 @@ def main():
     np.savetxt(table, np.column_stack([vr, chi_t, K_t, Arr_t, Pi_t]), header=hdr, fmt="%.12e")
     # Vlasov (GRTeclyn PBHVlasov) table: rho (normal-observer dust density), u_r = 0 in the synchronous slice
     rho_t = 0.5 * Pi_t ** 2
-    np.savetxt(os.path.join(a.out, "ltb_vlasov_table.dat"),
-               np.column_stack([vr, chi_t, K_t, Arr_t, rho_t, np.zeros_like(vr)]),
-               header=hdr.replace("Pi", "rho  u_r"), fmt="%.12e")
+    vcols = [vr, chi_t, K_t, Arr_t, rho_t, np.zeros_like(vr)]
+    vhdr = hdr.replace("Pi", "rho  u_r")
+    if a.sigma_inj > 0:
+        vcols += [np.interp(vr, varrho, sig_r), np.interp(vr, varrho, sig_t)]   # linear: the cut at xdisp is sharp
+        vhdr = vhdr.replace("rho  u_r", "rho  u_r  sigma_r/sigma_inj  sigma_t/sigma_inj")
+    np.savetxt(os.path.join(a.out, "ltb_vlasov_table.dat"), np.column_stack(vcols), header=vhdr, fmt="%.12e")
 
     # --- grid and time-step choices
     rm_phys = float(np.interp(rm, r, varrho))
@@ -262,6 +281,9 @@ pbh_vlasov.theta_ray_n = 256
 pbh_vlasov.theta_ray_dr = 0.5
 pbh_vlasov.theta_profile_interval = 4
 pbh_vlasov.max_disp_cells = 0.8
+# warm particles (0 = cold): dispersion at injection; the table columns 7-8 carry sigma_r, sigma_t / sigma at t_0
+pbh_vlasov.sigma = {a.sigma_inj}
+pbh_vlasov.sigma_seed = 12345
 # AMReX TimeIntegrator used by the AH finder flow (required parameters)
 integration.type = RungeKutta
 integration.rk.type = 4

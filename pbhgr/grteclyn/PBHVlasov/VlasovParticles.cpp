@@ -4,6 +4,7 @@
 #include "TensorAlgebra.hpp"
 #include <AMReX_MultiFabUtil.H>
 #include <cmath>
+#include <cstdint>
 
 using namespace VlasovIdx;
 
@@ -97,6 +98,63 @@ struct MetricAtParticle
 
 namespace
 {
+// Deterministic hash-based random numbers (independent of the MPI layout)
+inline std::uint64_t splitmix64(std::uint64_t &s)
+{
+    s += 0x9E3779B97F4A7C15ULL;
+    std::uint64_t z = s;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+inline double hash_uniform(std::uint64_t &s) { return (splitmix64(s) >> 11) * (1.0 / 9007199254740992.0); }
+inline double hash_gauss(std::uint64_t &s)
+{
+    double u1 = hash_uniform(s);
+    const double u2 = hash_uniform(s);
+    if (u1 < 1e-300)
+        u1 = 1e-300;
+    return std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
+}
+// Unit-variance isotropic Gaussian velocity for sub-particle `sub` of the lattice cell `key`.  For 2^3 particles per
+// cell the eight velocities are the corners of a randomly rotated cube scaled by a Maxwellian speed: every particle is
+// marginally N(0, 1) per component, while each cell has zero net momentum and an isotropic second moment (quiet start).
+// Other lattices fall back to independent Gaussians.
+inline void unit_velocity(std::uint64_t key, int sub, int n_per_dir, std::uint64_t seed, amrex::Real *v)
+{
+    std::uint64_t s = key ^ (seed * 0xD1B54A32D192ED03ULL);
+    splitmix64(s);
+    if (n_per_dir == 2)
+    {
+        double q[4], nq = 0.0;
+        for (int i = 0; i < 4; ++i)
+        {
+            q[i] = hash_gauss(s);
+            nq += q[i] * q[i];
+        }
+        nq = std::sqrt(nq);
+        for (int i = 0; i < 4; ++i)
+            q[i] /= nq;
+        const double g1 = hash_gauss(s), g2 = hash_gauss(s), g3 = hash_gauss(s);
+        const double speed = std::sqrt((g1 * g1 + g2 * g2 + g3 * g3) / 3.0); // times the corner (+-1, +-1, +-1)
+        const double c[3] = {(sub & 1) ? 1.0 : -1.0, (sub & 2) ? 1.0 : -1.0, (sub & 4) ? 1.0 : -1.0};
+        // rotation matrix of the unit quaternion (w, x, y, z) = (q0, q1, q2, q3)
+        const double w = q[0], x = q[1], y = q[2], z = q[3];
+        const double Rm[3][3] = {{1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)},
+                                 {2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)},
+                                 {2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)}};
+        for (int i = 0; i < 3; ++i)
+            v[i] = speed * (Rm[i][0] * c[0] + Rm[i][1] * c[1] + Rm[i][2] * c[2]);
+    }
+    else
+    {
+        s ^= static_cast<std::uint64_t>(sub + 1) * 0x2545F4914F6CDD1DULL;
+        splitmix64(s);
+        for (int i = 0; i < 3; ++i)
+            v[i] = hash_gauss(s);
+    }
+}
+
 // Particle lattice built level by level in each level's own index space: n_per_dir^3 particles per level-l cell
 // inside the level-l grids grown by buffer_fine cells, excluding the (grown) region of level l+1.  Cells are
 // visited through the level-0 tiles owned by this rank (refined to level l), so creation is distributed;
@@ -170,7 +228,12 @@ void make_lattice(VlasovParticles &pc, const amrex::Geometry &geom0, int n_per_d
                                 p.pos(2) = plo[2] + (iv[2] + (c + 0.5) / n) * dxl[2];
                                 for (int q = 0; q < VlasovIdx::NAOS; ++q)
                                     p.rdata(q) = 0.0;
-                                fill(p, dV_sub);
+                                // per-cell key (level + cell index) and sub-lattice index for balanced velocity sets
+                                const std::uint64_t key = (static_cast<std::uint64_t>(l) << 58) ^
+                                                          (static_cast<std::uint64_t>(iv[0]) * 0x9E3779B97F4A7C15ULL) ^
+                                                          (static_cast<std::uint64_t>(iv[1]) * 0xC2B2AE3D27D4EB4FULL) ^
+                                                          (static_cast<std::uint64_t>(iv[2]) * 0x165667B19E3779F9ULL);
+                                fill(p, dV_sub, key, a + n * (b + n * c));
                                 host.push_back(p);
                             }
             }
@@ -186,7 +249,8 @@ void make_lattice(VlasovParticles &pc, const amrex::Geometry &geom0, int n_per_d
 
 void VlasovParticles::init_uniform(const amrex::Geometry &geom, amrex::Real rho, int n_per_dir)
 {
-    make_lattice(*this, geom, n_per_dir, m_lattice_buffer, [=](ParticleType &p, amrex::Real dV_sub) {
+    make_lattice(*this, geom, n_per_dir, m_lattice_buffer,
+                 [=](ParticleType &p, amrex::Real dV_sub, std::uint64_t /*key*/, int /*sub*/) {
         p.rdata(m) = rho * dV_sub;
         p.rdata(Gamma) = 1.0;
         p.rdata(tau) = m_tau0;
@@ -195,8 +259,11 @@ void VlasovParticles::init_uniform(const amrex::Geometry &geom, amrex::Real rho,
 
 void VlasovParticles::init_from_table(const amrex::Geometry &geom, const std::vector<amrex::Real> &r_tab,
                                       const std::vector<amrex::Real> &rho_tab, const std::vector<amrex::Real> &ur_tab,
-                                      const std::vector<amrex::Real> &chi_tab, int n_per_dir)
+                                      const std::vector<amrex::Real> &chi_tab, int n_per_dir,
+                                      const std::vector<amrex::Real> &sr_tab, const std::vector<amrex::Real> &st_tab,
+                                      amrex::Real sigma, std::uint64_t seed)
 {
+    const bool warm = sigma > 0.0 && sr_tab.size() == r_tab.size() && st_tab.size() == r_tab.size();
     const auto plo = geom.ProbLoArray();
     const auto phi = geom.ProbHiArray();
     const amrex::Real cx = 0.5 * (plo[0] + phi[0]), cy = 0.5 * (plo[1] + phi[1]), cz = 0.5 * (plo[2] + phi[2]);
@@ -207,20 +274,42 @@ void VlasovParticles::init_from_table(const amrex::Geometry &geom, const std::ve
         const amrex::Real t = s - i;
         return (1 - t) * tab[i] + t * tab[i + 1];
     };
-    make_lattice(*this, geom, n_per_dir, m_lattice_buffer, [&](ParticleType &p, amrex::Real dV_sub) {
+    make_lattice(*this, geom, n_per_dir, m_lattice_buffer,
+                 [&](ParticleType &p, amrex::Real dV_sub, std::uint64_t key, int sub) {
         const amrex::Real X = p.pos(0) - cx, Y = p.pos(1) - cy, Z = p.pos(2) - cz;
         const amrex::Real r = std::sqrt(X * X + Y * Y + Z * Z);
         const amrex::Real rho = interp(rho_tab, r), chi = interp(chi_tab, r), ur = interp(ur_tab, r);
-        // rho is the normal-observer energy density = Gamma * rest-mass density; with radial u_r the covariant
-        // components are u_i = u_r n_i psi^2 (n_i = x_i/r, gamma_ij = psi^4 delta_ij)
-        const amrex::Real sqrtg = std::pow(chi, -1.5), psi2 = 1.0 / std::sqrt(chi), G = std::sqrt(1.0 + ur * ur);
-        p.rdata(m) = rho / G * sqrtg * dV_sub;
+        // momentum per unit mass in the orthonormal frame of the normal observer (gamma_ij = psi^4 delta_ij):
+        // bulk radial u_r plus, for warm particles, the thermal part with the local dispersions sigma_r, sigma_t
+        // (non-relativistic addition, as in the 1D code)
+        amrex::Real pv[3] = {0.0, 0.0, 0.0};
         if (r > 0.0)
         {
-            p.rdata(u1) = ur * psi2 * X / r;
-            p.rdata(u2) = ur * psi2 * Y / r;
-            p.rdata(u3) = ur * psi2 * Z / r;
+            const amrex::Real nn[3] = {X / r, Y / r, Z / r};
+            for (int i = 0; i < 3; ++i)
+                pv[i] = ur * nn[i];
+            if (warm)
+            {
+                const amrex::Real sr = sigma * interp(sr_tab, r), st = sigma * interp(st_tab, r);
+                if (sr > 0.0 || st > 0.0)
+                {
+                    amrex::Real v[3];
+                    unit_velocity(key, sub, n_per_dir, seed, v);
+                    const amrex::Real vr = v[0] * nn[0] + v[1] * nn[1] + v[2] * nn[2];
+                    for (int i = 0; i < 3; ++i)
+                        pv[i] += sr * vr * nn[i] + st * (v[i] - vr * nn[i]);
+                }
+            }
         }
+        // rho is the normal-observer energy density = Gamma * rest-mass density, so the particle rest mass carries
+        // 1/Gamma of its own Gamma and the deposited energy density equals the constraint-satisfying rho;
+        // covariant components u_i = psi^2 p_i
+        const amrex::Real sqrtg = std::pow(chi, -1.5), psi2 = 1.0 / std::sqrt(chi);
+        const amrex::Real G = std::sqrt(1.0 + pv[0] * pv[0] + pv[1] * pv[1] + pv[2] * pv[2]);
+        p.rdata(m) = rho / G * sqrtg * dV_sub;
+        p.rdata(u1) = psi2 * pv[0];
+        p.rdata(u2) = psi2 * pv[1];
+        p.rdata(u3) = psi2 * pv[2];
         p.rdata(Gamma) = G;
         p.rdata(tau) = m_tau0;
     });
