@@ -33,6 +33,11 @@ print(f"3D run {a.run3d}: {ok.sum()} horizon rows, far time {t3.min():.4f}-{t3.m
 print(f"   first detection: t_far {t3[0]:.4f}, M {M3[0]:.3f}, r_AH {rays[ok, 2][0]:.2f} = {rays[ok, 2][0] / (setup['dx'] / 2 ** 6):.1f} finest cells, tau_AH {tau3[0]:.4f}, tau_core {tauc3[0]:.4f}")
 
 L = LTBGaussian(a.mu)
+def ref_tau(Ms, taus, M):
+    w = max(0.005, 0.05 * M)
+    sel = np.abs(Ms - M) < w
+    return float(np.median(taus[sel])) if sel.sum() >= 5 else float(np.interp(M, Ms, taus))
+
 def ltb_tau(M):
     r = brentq(lambda x: L.m(x) - M * MH, 1e-6, 10.0)
     return L.t_AH(r) / tC0
@@ -51,17 +56,17 @@ for tag, pat in [("1D cold", "sig0e+00"), ("1D sig", "sig[1-9]e-0[0-9]")]:
     ref[tag] = (Mtrap[o], z["tau_trap"][sel][o] / tC0, os.path.basename(fz[0]))
     print(f"   {tag}: {ref[tag][2]} (first AH at coordinate {t_ah.min():.4f} t_C(0), {M_ah.min():.4f} M_H)")
 
-print("\nM_AH/M_H | 3D far time | 3D tau_AH | 1D cold tau | 3D-1D | LTB t_AH(m=M) | 1D cold - LTB" + (" | 1D sig tau" if "1D sig" in ref else ""))
+print("\nM_AH/M_H | 3D far time | 3D tau_AH | 1D cold tau | 3D-1D | LTB t_AH(m=M) | 1D cold - LTB" + (" | 1D sig tau | 3D-1Dsig" if "1D sig" in ref else ""))
 for M in a.M:
     if M < M3.min() or M > M3.max():
         continue
     tf = np.interp(M, M3, t3); ta = np.interp(M, M3, tau3)
     row = f"{M:5.3f}    | {tf:.4f}      | {ta:.4f}    |"
     if "1D cold" in ref:
-        Mc, tc, _ = ref["1D cold"]; t1 = np.interp(M, Mc, tc)
+        Mc, tc, _ = ref["1D cold"]; t1 = np.interp(M, Mc, tc)   # cold: monotonic, interpolate
         row += f" {t1:.4f}      | {ta - t1:+.4f} | {ltb_tau(M):.4f}        | {t1 - ltb_tau(M):+.4f}"
     else:
         row += f" -           | -       | {ltb_tau(M):.4f}        | -"
     if "1D sig" in ref:
-        Ms, ts, _ = ref["1D sig"]; row += f" | {np.interp(M, Ms, ts):.4f}"
+        Ms, ts, _ = ref["1D sig"]; row += f" | {ref_tau(Ms, ts, M):.4f} | {ta - ref_tau(Ms, ts, M):+.4f}"
     print(row)
