@@ -19,6 +19,7 @@
 #include "PositiveChiAndLapse.hpp"
 #include "StateTypes.hpp"
 #include <AMReX_MultiFabUtil.H>
+#include <AMReX_iMultiFab.H>
 #include <fstream>
 #include <sstream>
 
@@ -678,6 +679,24 @@ void PBHVlasovLevel::specific_post_init()
             amr->particles.init_lattice(geom0, ip.n_per_dir);
             for (int lev = 0; lev <= amr->finestLevel(); ++lev)
                 dynamic_cast<PBHVlasovLevel &>(amr->getLevel(lev)).init_particles_from_constraints();
+            // match the deposited sources to the constraints (see build_deposit_correction)
+            int n_match = 8;
+            GRParmParse("pbh_vlasov").query("yoo_match_iter", n_match);
+            for (int it = 0; it <= n_match; ++it)
+            {
+                amr->deposit_all_levels(state_index);
+                amrex::Real res = 0.0;
+                for (int lev = 0; lev <= amr->finestLevel(); ++lev)
+                    res = std::max(res, dynamic_cast<PBHVlasovLevel &>(amr->getLevel(lev)).build_deposit_correction());
+                amrex::Print() << "PBHVlasov: deposit vs constraints after " << it << " corrections: max |D_target/D_dep - 1| = "
+                               << res << "\n";
+                if (it == n_match)
+                    break;
+                for (int lev = 0; lev <= amr->finestLevel(); ++lev)
+                    dynamic_cast<PBHVlasovLevel &>(amr->getLevel(lev)).apply_deposit_correction();
+            }
+            for (int lev = 0; lev <= amr->finestLevel(); ++lev)
+                dynamic_cast<PBHVlasovLevel &>(amr->getLevel(lev)).release_deposit_targets();
         }
         else
         {
@@ -714,7 +733,8 @@ void PBHVlasovLevel::init_particles_from_constraints()
     FillPatch(*this, state_gh, 3, time, state_index, 0, state_new.nComp());
     // vacuum constraints on the valid cells grown by one: E = Ham / 16 pi, J_i = Mom_i / 8 pi
     amrex::MultiFab con(state_new.boxArray(), state_new.DistributionMap(), 4, 1);
-    amrex::MultiFab fld(state_new.boxArray(), state_new.DistributionMap(), 11, 1);
+    m_yoo_target = std::make_unique<amrex::MultiFab>(state_new.boxArray(), state_new.DistributionMap(), 11, 1);
+    amrex::MultiFab &fld = *m_yoo_target;
     const Constraints constraints(Geom().CellSize(0), 0, Interval(1, 3));
     const auto &gh = state_gh.const_arrays();
     const auto &ca = con.arrays();
@@ -733,6 +753,80 @@ void PBHVlasovLevel::init_particles_from_constraints()
     get_vlasov_amr_ptr()->particles.set_from_fields(Level(), fld, Geom());
     amrex::Print() << "PBHVlasov: level " << Level() << " particles from the constraints, E in [" << fld.min(0, 0) << ", "
                    << fld.max(0, 0) << "], max |J| " << std::max({fld.norm0(1), fld.norm0(2), fld.norm0(3)}) << "\n";
+}
+
+// At a super-horizon start the binding energy of a shell is a small difference of large terms (2E against U^2 and
+// 2m/R, 10^2-10^3 times larger), so a 10^-3 error of the deposited density (CIC smoothing of the O(1) variation of
+// sqrt(gamma) E, level interfaces) changes E by tens of per cent.  The particle masses are therefore iterated until
+// the deposited coordinate density equals the constraint one, and u_i is shifted to match the momentum density.
+amrex::Real PBHVlasovLevel::build_deposit_correction()
+{
+    const amrex::MultiFab &state_new = get_new_data(state_index);
+    m_yoo_corr = std::make_unique<amrex::MultiFab>(state_new.boxArray(), state_new.DistributionMap(), 4, 1);
+    m_yoo_corr->setVal(1.0, 0, 1, 1);
+    m_yoo_corr->setVal(0.0, 1, 3, 1);
+    amrex::MultiFab dev(state_new.boxArray(), state_new.DistributionMap(), 1, 0);
+    {
+        const auto &sa = state_new.const_arrays();
+        const auto &ta = m_yoo_target->const_arrays();
+        const auto &ca = m_yoo_corr->arrays();
+        const auto &da = dev.arrays();
+        amrex::ParallelFor(dev, [=] AMREX_GPU_DEVICE(int b, int i, int j, int k) {
+            const amrex::Real sg = std::pow(ta[b](i, j, k, 4), -1.5); // sqrt(gamma)
+            const amrex::Real Dt = ta[b](i, j, k, 0) * sg;            // target coordinate energy density
+            ca[b](i, j, k, 0) = Dt / sa[b](i, j, k, c_rho_p);
+            for (int d = 0; d < 3; ++d)
+                ca[b](i, j, k, 1 + d) = (ta[b](i, j, k, 1 + d) * sg - sa[b](i, j, k, c_S1 + d)) / Dt;
+            da[b](i, j, k) = ca[b](i, j, k, 0) - 1.0;
+        });
+        amrex::Gpu::streamSynchronize();
+    }
+    // residual on the cells not covered by a finer level (covered cells hold averaged-down fine values, whose
+    // difference from the coarse target is a discretisation effect that no particle carries)
+    if (Level() < parent->finestLevel())
+    {
+        const amrex::MultiFab &fine = parent->getLevel(Level() + 1).get_new_data(state_index);
+        const amrex::iMultiFab mask = amrex::makeFineMask(dev, fine.boxArray(), parent->refRatio(Level()), 1, 0);
+        const auto &ma = mask.const_arrays();
+        const auto &da = dev.arrays();
+        amrex::ParallelFor(dev, [=] AMREX_GPU_DEVICE(int b, int i, int j, int k) { da[b](i, j, k) *= ma[b](i, j, k); });
+        amrex::Gpu::streamSynchronize();
+    }
+    const amrex::Real res = dev.norm0(0, 0);
+    amrex::Print() << "    level " << Level() << ": max " << res << ", rms " << dev.norm2(0) / std::sqrt(dev.boxArray().d_numPts())
+                   << "\n";
+    if (Level() > 0)
+    {
+        // ghost cells outside the level: piecewise-constant values of the coarser level's correction
+        auto &crse = dynamic_cast<PBHVlasovLevel &>(parent->getLevel(Level() - 1));
+        const int rr = parent->refRatio(Level() - 1)[0];
+        amrex::BoxArray cba = m_yoo_corr->boxArray();
+        cba.grow(1);
+        cba.coarsen(rr);
+        amrex::MultiFab ctmp(cba, m_yoo_corr->DistributionMap(), 4, 0);
+        ctmp.setVal(1.0, 0, 1, 0);
+        ctmp.setVal(0.0, 1, 3, 0);
+        ctmp.ParallelCopy(*crse.m_yoo_corr, 0, 0, 4, 0, 0, parent->Geom(Level() - 1).periodicity());
+        for (amrex::MFIter mfi(*m_yoo_corr); mfi.isValid(); ++mfi)
+        {
+            const amrex::Box vbx = mfi.validbox();
+            const amrex::Box gbx = amrex::grow(vbx, 1);
+            auto const &f = m_yoo_corr->array(mfi);
+            auto const &c = ctmp.const_array(mfi);
+            amrex::LoopOnCpu(gbx, [&](int i, int j, int k) {
+                if (!vbx.contains(amrex::IntVect(i, j, k)))
+                    for (int n = 0; n < 4; ++n)
+                        f(i, j, k, n) = c(amrex::coarsen(i, rr), amrex::coarsen(j, rr), amrex::coarsen(k, rr), n);
+            });
+        }
+    }
+    m_yoo_corr->FillBoundary(Geom().periodicity());
+    return res;
+}
+
+void PBHVlasovLevel::apply_deposit_correction()
+{
+    get_vlasov_amr_ptr()->particles.apply_correction(Level(), *m_yoo_corr, Geom());
 }
 
 // Expansion-aware time step: the coordinate light speed of the far field is sqrt(chi_max), so the coarse step is

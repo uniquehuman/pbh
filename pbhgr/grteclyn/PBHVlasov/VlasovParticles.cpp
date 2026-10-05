@@ -477,6 +477,22 @@ void VlasovParticles::set_from_fields(int lev, const amrex::MultiFab &fld, const
     amrex::Gpu::streamSynchronize();
 }
 
+void VlasovParticles::apply_correction(int lev, const amrex::MultiFab &corr, const amrex::Geometry &geom)
+{
+    const auto plo = geom.ProbLoArray();
+    const auto dxi = geom.InvCellSizeArray();
+    amrex::MeshToParticle(*this, corr, lev,
+                          [=] AMREX_GPU_DEVICE(ParticleType &p, amrex::Array4<const amrex::Real> const &arr) {
+                              amrex::Real f[4];
+                              interp_fields_at(p, arr, plo, dxi, f, 4);
+                              p.rdata(m) *= f[0];
+                              p.rdata(u1) += f[1];
+                              p.rdata(u2) += f[2];
+                              p.rdata(u3) += f[3];
+                          });
+    amrex::Gpu::streamSynchronize();
+}
+
 void VlasovParticles::deposit_level(int lev, const amrex::Vector<amrex::MultiFab *> &a_states,
                                     const amrex::Vector<amrex::Geometry> &a_geoms)
 {

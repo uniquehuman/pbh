@@ -2,6 +2,7 @@
 #ifndef PBHVLASOVLEVEL_HPP_
 #define PBHVLASOVLEVEL_HPP_
 
+#include <memory>
 #include "DefaultLevelBld.hpp"
 #include "FourthOrderDerivatives.hpp"
 #include "GRAmrLevel.hpp"
@@ -37,6 +38,12 @@ class PBHVlasovLevel : public GRAmrLevel
     //! `yoo` mode: energy and momentum density from the vacuum constraints of this level's data, then the level's
     //! particles from them (called for every level once the lattice exists)
     void init_particles_from_constraints();
+    //! `yoo` mode: correction field of this level from the deposited coordinate sources and the constraint targets
+    //! (mass ratio D_target / D_dep and du_i = (S_target - S_dep)_i / D_target; ghost cells from the coarser level and
+    //! the neighbours); returns max |ratio - 1|.  apply_deposit_correction() applies it to the level's particles.
+    amrex::Real build_deposit_correction();
+    void apply_deposit_correction();
+    void release_deposit_targets() { m_yoo_target.reset(); m_yoo_corr.reset(); }
 
   private:
     void deposit_particles();
@@ -45,6 +52,8 @@ class PBHVlasovLevel : public GRAmrLevel
     // tabulated spherical initial data (isotropic radius): chi, K, A^r_r, rho, u_r
     std::vector<amrex::Real> m_tab_r, m_tab_chi, m_tab_K, m_tab_Arr, m_tab_rho, m_tab_ur;
     std::vector<amrex::Real> m_tab_sr, m_tab_st; // optional: sigma_r, sigma_t ratios (warm start)
+    // yoo mode, initialisation only: E, J_i, chi, h~_ij from the constraints (1 ghost) and the correction field
+    std::unique_ptr<amrex::MultiFab> m_yoo_target, m_yoo_corr;
     bool m_table_loaded{false};
 };
 

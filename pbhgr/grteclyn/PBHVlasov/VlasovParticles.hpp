@@ -82,6 +82,9 @@ class VlasovParticles : public amrex::ParticleContainer<VlasovIdx::NAOS, 0, 0, 0
     //! h33, CIC-interpolated): v_i = J_i / E, Gamma = (1 - gamma^{ij} v_i v_j)^{-1/2}, u_i = Gamma v_i,
     //! m = E sqrt(gamma) dV / Gamma
     void set_from_fields(int lev, const amrex::MultiFab &fld, const amrex::Geometry &geom);
+    //! multiply the rest mass by corr(0) and add corr(1..3) to u_i (CIC-interpolated, 1 ghost cell): matches the
+    //! deposited sources to the constraint-satisfying ones at the initial time
+    void apply_correction(int lev, const amrex::MultiFab &corr, const amrex::Geometry &geom);
     //! deposit rho_p, S_i, S_ij on level lev (own particles + ghost copies of level lev-1 particles near the grids
     //! + copies of level lev+1 particles near their boundary, so that coarse-fine interfaces are consistent) into
     //! the matter components of a_states[lev]; a_states/a_geoms indexed by level
