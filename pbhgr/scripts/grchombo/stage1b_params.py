@@ -16,6 +16,9 @@ ap.add_argument("--p", type=float, default=0.0)
 ap.add_argument("--stop", type=float, default=3.5, help="stop at this multiple of t_C(0)")
 ap.add_argument("--gauge_on", type=float, default=0.5, help="gauge switch at this multiple of t_C(0)")
 ap.add_argument("--lapse_coeff", type=float, default=2.0)
+ap.add_argument("--max_level", type=int, default=6, help="finest AMR level; each level is a 64^3 box of half the width "
+                "(level l covers +-L/2^(l+1)); use 7 for mu <= 0.1 so the horizon has > 5 cells per radius")
+ap.add_argument("--check_int", type=int, default=20, help="checkpoint interval in coarse steps")
 ap.add_argument("--out", required=True)
 a = ap.parse_args()
 
@@ -28,13 +31,13 @@ a_ref = (0.5 * tC0 / t_i) ** (2.0 / 3.0)
 L = 15.360000 * a_ref  # 6194.411298 / 403.29929194892884 comoving box of the mu = 0.3 runs
 dx0 = L / 64
 template = f"""# Stage 1b early-start run: mu = {a.mu}, e = {a.e}, p = {a.p}; t_C(0) = {tC0:.4f}, a_ref = {a_ref:.6f}
-# geodesic slicing to {a.gauge_on} t_C(0), then lapse_coeff {a.lapse_coeff} + Gamma-driver; stop at {a.stop} t_C(0)
+# geodesic slicing to {a.gauge_on} t_C(0), then lapse_coeff {a.lapse_coeff} + Gamma-driver; stop at {a.stop} t_C(0); {a.max_level + 1} levels
 amr.verbose = 1
 amr.n_cell = 64 64 64
 geometry.prob_extent = {L:.6f} {L:.6f} {L:.6f}
 geometry.is_periodic = 1 1 1
 geometry.center = {L/2:.6f} {L/2:.6f} {L/2:.6f}
-amr.max_level = 6
+amr.max_level = {a.max_level}
 amr.regrid_int = -1
 amr.max_grid_size = 16
 amr.blocking_factor = 8
@@ -72,7 +75,7 @@ pbh_vlasov.theta_ray_dr = 0.5
 pbh_vlasov.theta_profile_interval = 10
 pbh_vlasov.sphere_diag = 1
 amr.plot_int = 20
-amr.check_int = 20
+amr.check_int = {a.check_int}
 amr.plot_vars = chi lapse K rho_p h11 h22 A11 A22 shift1
 rho_line_extraction.enabled = true
 rho_line_extraction.end = {L - dx0/2:.6f} {L/2:.6f} {L/2:.6f}
