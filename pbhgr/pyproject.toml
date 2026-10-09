@@ -3,6 +3,8 @@ name = "pbhgr"
 version = "0.1.0"
 description = "Spherical Einstein-Vlasov + decay solver and rare-event statistics scaffolding for PBH formation (Stage A)"
 requires-python = ">=3.12"
+license = {text = "MIT-0"}
+authors = [{name = "Sergey Ivliev"}]
 dependencies = ["numpy", "scipy", "psutil", "pyyaml", "h5py"]
 
 [tool.pytest.ini_options]
