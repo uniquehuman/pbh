@@ -1,0 +1,56 @@
+# Stage 1b production template: Yoo long-wavelength data from t_i, seven levels, same box and coordinates as the
+# validated late-start runs (a_ref = a(0.5 t_C(0)) for mu = 0.3).  Geodesic slicing until 0.5 t_C(0), then the
+# profile-referenced 1+log lapse (coefficient 2) and the Gamma-driver.  Change mu, ell_e, ell_p (and a_ref,
+# gauge_on_time, stop_time, gauge.eta with t_C(0) and M_H) for other cases.
+amr.verbose = 1
+amr.n_cell = 64 64 64
+geometry.prob_extent = 6194.411298 6194.411298 6194.411298
+geometry.is_periodic = 1 1 1
+geometry.center = 3097.205649 3097.205649 3097.205649
+amr.max_level = 6
+amr.regrid_int = -1
+amr.max_grid_size = 16
+amr.blocking_factor = 8
+amr.n_error_buf = 0
+evolution.dt_multiplier = 0.25
+evolution.max_steps = 10000000
+evolution.sigma = 0.3
+evolution.stop_time = 4751.387
+gauge.lapse_advec_coeff = 1.0
+gauge.lapse_coeff = 2.0
+gauge.lapse_power = 1.0
+gauge.shift_advec_coeff = 0.0
+gauge.shift_Gamma_coeff = 0.75
+gauge.eta = 5.443311e-03
+ccz4.formulation = 1
+pbh_vlasov.init = yoo
+pbh_vlasov.H0 = 5.0
+pbh_vlasov.mu = 0.3
+pbh_vlasov.ell_e = 0.0
+pbh_vlasov.ell_p = 0.0
+pbh_vlasov.a_ref = 403.29929194892884
+pbh_vlasov.tau0 = 0.13333333333333333
+pbh_vlasov.dt_mode = 1
+pbh_vlasov.dt_frac = 0.05
+pbh_vlasov.yoo_match_iter = 6
+pbh_vlasov.gauge_on_time = 1079.757677
+pbh_vlasov.n_per_dir = 2
+pbh_vlasov.lattice_buffer = 4
+pbh_vlasov.max_disp_cells = 0.8
+pbh_vlasov.ah_interval = 0
+pbh_vlasov.theta_rays = 1
+pbh_vlasov.theta_ray_n = 256
+pbh_vlasov.theta_ray_dr = 0.5
+pbh_vlasov.theta_profile_interval = 10
+pbh_vlasov.sphere_diag = 1
+amr.plot_int = 20
+amr.check_int = 20
+amr.plot_vars = chi lapse K rho_p h11 h22 A11 A22 shift1
+rho_line_extraction.enabled = true
+rho_line_extraction.end = 6097.623621 3097.205649 3097.205649
+chi_line_extraction.enabled = true
+chi_line_extraction.end = 6097.623621 3097.205649 3097.205649
+K_line_extraction.enabled = true
+K_line_extraction.end = 6097.623621 3097.205649 3097.205649
+lapse_line_extraction.enabled = true
+lapse_line_extraction.end = 6097.623621 3097.205649 3097.205649

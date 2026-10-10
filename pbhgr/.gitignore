@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.so
+runs/
+.pytest_cache/
+*.h5
