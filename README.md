@@ -45,10 +45,16 @@ The 3D modules are compiled inside GRTeclyn and GRChombo source trees: see
 
 - Spherical GR–Vlasov, cold, converged: μ_th(100 t_H) ≈ 0.039, μ_th(300 t_H) ≈ 0.019, μ_th(1000 t_H) ≈ 0.0086.
 - 3D GR with PBHVlasov, spherical peak: horizon growth matches the exact LTB solution and the 1D code to
-  ±0.01 t_C(0) over 0.1–0.6 M_H; a peak with ellipticity e = 0.2 (μ = 0.3) forms a ≈ 1 M_H horizon at matter
-  proper time τ = 2.09 t_C(0).
+  ±0.01 t_C(0) over 0.1–0.6 M_H.
+- 3D GR with PBHVlasov, ellipticity e = 0.2 (preliminary, see the caveat): μ = 0.3 forms a ≈ 1 M_H horizon at
+  matter proper time τ = 2.09 t_C(0); μ = 0.1 forms a 0.35–0.56 M_H horizon at τ = 2.44 t_C(0).
 
-Details: https://pbh.ivliev.org/en/results/
+**Caveat / known issue (10 October 2026):** early-start 3D runs (`pbh_vlasov.init = yoo`) develop an instability
+at the faces of the finest adaptive-mesh level during the super-horizon phase. The e = 0.2 results carry a not yet
+quantified error of order 10 % in the traceless extrinsic curvature Ã and are preliminary; the e = 0 checks
+against LTB are unaffected. Details: the 10 October entry of the log, https://pbh.ivliev.org/en/log/
+
+Results: https://pbh.ivliev.org/en/results/
 
 ## Licence
 
