@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software or its results, please cite it as below (not required: MIT-0 / CC0)."
+title: "PBH: codes for primordial black hole formation in an early matter era"
+abstract: "Einstein–Vlasov codes for primordial black hole formation before reheating: a spherical solver in the areal–CMC gauge (pbhgr), exact LTB and peak profiles, a Newtonian 3D particle-mesh code, the 3D GR particle module PBHVlasov for GRTeclyn, the GRChombo example PBHCosmo, and sphdiag, diagnostics of spherical 3+1 slices."
+authors:
+  - family-names: Ivliev
+    given-names: Sergey
+license: MIT-0
+url: "https://pbh.ivliev.org"
+repository-code: "https://github.com/uniquehuman/pbh"
+version: 0.2.0
+date-released: 2026-10-10
+keywords:
+  - primordial black holes
+  - numerical relativity
+  - Einstein–Vlasov
+  - early matter era

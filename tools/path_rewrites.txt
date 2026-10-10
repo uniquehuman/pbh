@@ -1,0 +1,2 @@
+Appendix B of brief_verification/verification_and_plan.md==>docs/areal_cmc_gauge.md
+regex:\n\nSee `agent_logs/implementation_B\.md` for the design decisions, how the contract was read, and\s+the known limitations\.\n==>\n
